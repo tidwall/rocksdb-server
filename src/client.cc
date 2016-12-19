@@ -23,7 +23,7 @@ typedef struct client_t {
 	int args_len;
 	int *args_size;
 
-	char tmp_err[0xFF]; // storing a temporary error
+	char *tmp_err; // storing a temporary error
 
 } client;
 
@@ -37,6 +37,9 @@ void client_free(client *c){
 		}
 		if (c->args){
 			free(c->args);
+		}
+		if (c->tmp_err){
+			free(c->tmp_err);
 		}
 		free(c);
 	}
@@ -74,6 +77,14 @@ client *client_new_tcp(unixsock tcp){
 	return c;
 }
 
+char *client_raw(client *c){
+	return c->output;
+}
+
+int client_raw_len(client *c){
+	return c->output_len;
+}
+
 error client_read(client *c, void *buf, int nbyte){
 	int n;
 	switch (c->type){
@@ -99,10 +110,32 @@ error client_read(client *c, void *buf, int nbyte){
 	return NULL;
 }
 
-static const char *expected_got(char *buf, char c1, char c2){
-	sprintf(buf, "Protocol error: expected '%c', got '%c'", c1, c2);
-	return buf;
+static void client_err_alloc(client *c, int n){
+	if (c->tmp_err){
+		free(c->tmp_err);
+	}
+	c->tmp_err = (char*)malloc(n);
+	if (!c->tmp_err){
+		panic("out of memory");
+	}
+	memset(c->tmp_err, 0, n);
 }
+
+error client_err_unknown_command(client *c, const char *name, int count){
+	client_err_alloc(c, strlen(name)+64);
+	c->tmp_err[0] = 0;
+	strcat(c->tmp_err, "unknown command '");
+	strncat(c->tmp_err, name, count);
+	strcat(c->tmp_err, "'");
+	return c->tmp_err;
+}
+
+error client_err_expected_got(client *c, char c1, char c2){
+	client_err_alloc(c, 64);
+	sprintf(c->tmp_err, "Protocol error: expected '%c', got '%c'", c1, c2);
+	return c->tmp_err;
+}
+
 static void client_append_arg(client *c, const char *data, int nbyte){
 	if (c->args_cap==c->args_len){
 		if (c->args_cap==0){
@@ -234,7 +267,7 @@ static error client_parse_command(client *c){
 			return "incomplete";
 		}
 		if (c->buf[i] != '$'){
-			return expected_got(c->tmp_err, '$', c->buf[i]);
+			return client_err_expected_got(c, '$', c->buf[i]);
 		}
 		i++;
 		int nsiz = 0;
@@ -365,22 +398,58 @@ void client_write_int(client *c, int n){
 	client_write(c, h, strlen(h));
 }
 
+void client_write_error(client *c, error err){
+	client_write(c, "-ERR ", 5);
+	client_write(c, err, strlen(err));
+	client_write_byte(c, '\r');
+	client_write_byte(c, '\n');
+}
+
 // client_flush flushes the bytes to the client output stream. it does not
 // check for errors because the client read operations handle socket errors.
 void client_flush(client *c){
-	if (c->output_len == 0){
+	client_flush_offset(c, 0);
+}
+
+void client_flush_offset(client *c, int offset){
+	if (c->output_len-offset <= 0){
 		return;
 	}
 	switch (c->type){
 	case CLIENT_PIPE:
-		write(STDOUT_FILENO, c->output, c->output_len);
+		write(STDOUT_FILENO, c->output+offset, c->output_len-offset);
 		break;
 	case CLIENT_TCP:
-		tcpsend(c->tcp, c->output, c->output_len, -1);
+		tcpsend(c->tcp, c->output+offset, c->output_len-offset, -1);
+		tcpflush(c->tcp, -1);
 		break;
 	case CLIENT_UNIX:
-		unixsend(c->unix, c->output, c->output_len, -1);
+		unixsend(c->unix, c->output+offset, c->output_len-offset, -1);
+		unixflush(c->unix, -1);
 		break;
 	}
 	c->output_len = 0;
+}
+
+// client_run tells the server to handle the clients commands.
+error client_run(client *c){
+	for (;;){
+		const char *err = client_read_command(c);
+		if (err){
+			if (strcmp(err, "eof")==0){
+				return NULL;
+			}
+			client_clear(c);
+			client_write_error(c, err);
+			client_flush(c);
+			return err;
+		}
+		err = exec_command(c);
+		if (err){
+			client_clear(c);
+			client_write_error(c, err);
+			client_flush(c);
+		}
+	}
+	return NULL;
 }
