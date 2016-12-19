@@ -8,13 +8,10 @@
 #include <sys/un.h>
 #include "rocksdb/db.h"
 #include <libmill.h>
-
+#include "shared.h"
 
 const int MAX_ARGS = 64;
 const int BUF_START_SIZE = 64;
-
-int stringmatchlen(const char *pattern, int patternLen,
-        const char *string, int stringLen, int nocase);
 
 rocksdb::DB* db = 0;
 
@@ -99,8 +96,8 @@ void output_flush(){
 }
 
 
-char expected_got_str[64];
-const char *expected_got(char c1, char c2){
+static char expected_got_str[64];
+static const char *expected_got(char c1, char c2){
 	sprintf(expected_got_str, "Protocol error: expected '%c', got '%c'", c1, c2);
 	return expected_got_str;
 }
@@ -486,6 +483,13 @@ coroutine void connection(int s) {
     } while (!done);
     close(s);
 }
+
+
+
+
+
+
+
 
 coroutine void handle_tcpconn(tcpsock s) {
 	tcpclose(s);
