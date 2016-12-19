@@ -104,14 +104,18 @@ static const char *expected_got(char *buf, char c1, char c2){
 	return buf;
 }
 static void client_append_arg(client *c, const char *data, int nbyte){
-	if (c->args_cap-c->args_len==0){
+	if (c->args_cap==c->args_len){
 		if (c->args_cap==0){
 			c->args_cap=1;
 		}else{
 			c->args_cap*=2;
 		}
-		c->args = (const char **)realloc(c->args, c->args_cap);
+		c->args = (const char**)realloc(c->args, c->args_cap*sizeof(const char *));
 		if (!c->args){
+			panic("out of memory");
+		}
+		c->args_size = (int*)realloc(c->args_size, c->args_cap*sizeof(int));
+		if (!c->args_size){
 			panic("out of memory");
 		}
 	}
@@ -183,16 +187,19 @@ static error client_parse_telnet_command(client *c){
 	return "incomplete";
 }
 
-int client_command_argc(client *c){
+int client_argc(client *c){
 	return c->args_len;
 }
-const char *client_command_argv(client *c, int i){
-	return c->args[i];
+int *client_argl(client *c){
+	return c->args_size;
+}
+const char **client_argv(client *c){
+	return c->args;
 }
 
 static error client_parse_command(client *c){
 	size_t i = c->buf_idx;
-	size_t z = c->buf_len+c->buf_idx;
+	size_t z = c->buf_idx+c->buf_len;
 	if (i >= z){
 		return "incomplete";
 	}
@@ -290,8 +297,9 @@ error client_read_command(client *c){
 		if (!c->buf){
 			panic("out of memory");
 		}
+	//	memset(c->buf+c->buf_idx+c->buf_len, 0, c->buf_cap-c->buf_idx-c->buf_len);
 	}
-	size_t n = read(STDIN_FILENO, c->buf+(c->buf_idx+c->buf_len), c->buf_cap-(c->buf_idx+c->buf_len));
+	size_t n = read(STDIN_FILENO, c->buf+c->buf_idx+c->buf_len, c->buf_cap-c->buf_idx-c->buf_len);
 	if (n <= 0){
 		if (n == 0){
 			if (c->buf_len>0){
@@ -321,7 +329,7 @@ static inline void client_output_require(client *c, size_t siz){
 	}
 }
 
-static void client_clear(client *c){
+void client_clear(client *c){
 	c->output_len = 0;
 }
 
@@ -330,13 +338,13 @@ static void client_write_byte(client *c, char b){
 	c->output[c->output_len++] = b;
 }
 
-void client_write(client *c, void *data, int n){
+void client_write(client *c, const char *data, int n){
 	client_output_require(c, c->output_len+n);
 	memcpy(c->output+c->output_len, data, n);	
 	c->output_len+=n;
 }
 
-void client_write_bulk(client *c, void *data, int n){
+void client_write_bulk(client *c, const char *data, int n){
 	char h[32];
 	sprintf(h, "$%d\r\n", n);
 	client_write(c, h, strlen(h));

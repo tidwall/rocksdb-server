@@ -116,306 +116,117 @@ const char *err_unknown_command(const char *name, int count){
 	return err_str;
 }
 
-const char *parse_telnet_command(){
-	size_t i = buf_idx;
-	size_t z = buf_len+buf_idx;
-	if (i >= z){
-		return "incomplete";
-	}
-	args_count = 0;
-	size_t s = i;
-	bool first = true;
-	for (;i<z;i++){
-		if (buf[i]=='\'' || buf[i]=='\"'){
-			if (!first){
-				return "Protocol error: unbalanced quotes in request";
-			}
-			char c = buf[i];
-			i++;
-			s = i;
-			for (;i<z;i++){
-				if (buf[i] == c){
-					// TODO: make sure next character is a space or line break.
-					if (i+1>=z||buf[i+1]==' '||buf[i+1]=='\r'||buf[i+1]=='\n'){
-						if (args_count >= MAX_ARGS){
-							return "Protocol error: too many arguments";
-						}
-						args[args_count] = buf+s;
-						args_size[args_count] = i-s;
-						args_count++;
-						//printf("[%s]\n", std::string(buf+s, i-s).c_str());
-					}else{
-						return "Protocol error: unbalanced quotes in request";
-					}
-					break;
-				}
-			}
-			i++;
-			continue;
-		}
-		if (buf[i] == '\n'){
-			if (!first){
-				size_t e;
-				if (i>s && buf[i-1] == '\r'){
-					e = i-1;
-				}else{
-					e = i;
-				}
-				if (args_count >= MAX_ARGS){
-					return "Protocol error: too many arguments";
-				}
-				args[args_count] = buf+s;
-				args_size[args_count] = e-s;
-				args_count++;
-			//	printf("[%s]\n", std::string(buf+s, e-s).c_str());
-			}
-			i++;
-			buf_len -= i-buf_idx;
-			if (buf_len == 0){
-				buf_idx = 0;
-			}else{
-				buf_idx = i;
-			}
-			return NULL;
-		}
-		if (buf[i] == ' '){
-			if (!first){
-				if (args_count >= MAX_ARGS){
-					return "Protocol error: too many arguments";
-				}
-				args[args_count] = buf+s;
-				args_size[args_count] = i-s;
-				args_count++;
-				//printf("[%s]\n", std::string(buf+s, i-s).c_str());
-				first = true;
-			}
-		}else{
-			if (first){
-				s = i;
-				first = false;
-			}
-		}
-	}
-
-	return "incomplete";
-}
-
-// parse_command parses the current command in the buffer.
-// returns NULL if there is no error.
-// returns "incomplete" if there is more data to read.
-// returns non-empty string on error.
-const char *parse_command(){
-	size_t i = buf_idx;
-	size_t z = buf_len+buf_idx;
-	if (i >= z){
-		return "incomplete";
-	}
-	if (buf[i] != '*'){
-		return parse_telnet_command();
-	}
-	i++;
-	size_t s = i;
-	for (;i < z;i++){
-		if (buf[i]=='\n'){
-			if (buf[i-1] !='\r'){
-				return "Protocol error: invalid multibulk length";
-			}
-			buf[i-1] = 0;
-			args_count = atoi(buf+s);
-			buf[i-1] = '\r';
-			if (args_count <= 0){
-				if (args_count < 0 || i-s != 2){
-					return "Protocol error: invalid multibulk length";
-				}
-			}
-			i++;
-			break;
-		}
-	}
-	if (args_count > MAX_ARGS){
-		return "Protocol error: too many arguments";
-	}
-	if (i >= z){
-		return "incomplete";
-	}
-	for (int j=0;j<args_count;j++){
-		if (i >= z){
-			return "incomplete";
-		}
-		if (buf[i] != '$'){
-			return expected_got('$', buf[i]);
-		}
-		i++;
-		int nsiz = 0;
-		size_t s = i;
-		for (;i < z;i++){
-			if (buf[i]=='\n'){
-				if (buf[i-1] !='\r'){
-					return "Protocol error: invalid bulk length";
-				}
-				buf[i-1] = 0;
-				nsiz = atoi(buf+s);
-				buf[i-1] = '\r';
-				if (nsiz <= 0){
-					if (nsiz < 0 || i-s != 2){
-						return "Protocol error: invalid bulk length";
-					}
-				}
-				i++;
-				if (z-i < nsiz+2){
-					return "incomplete";
-				}
-				s = i;
-				if (buf[s+nsiz] != '\r'){
-					return "Protocol error: invalid bulk data";
-				}
-				if (buf[s+nsiz+1] != '\n'){
-					return "Protocol error: invalid bulk data";
-				}
-				args[j] = buf+s;
-				args_size[j] = nsiz;
-				i += nsiz+2;
-				break;
-			}
-		}
-	}
-	buf_len -= i-buf_idx;
-	if (buf_len == 0){
-		buf_idx = 0;
-	}else{
-		buf_idx = i;
-	}
-	return NULL;
-}
-
-// read_command reads the next command from stdin
-// returns empty string if a command has been read.
-// returns non-empty string on error.
-const char *read_command(){
-	const char *err = parse_command();
-	if (err == NULL){
-		return NULL;
-	}
-	if (strcmp(err, "incomplete")!=0){
-		return err;
-	}
-	// read into buffer
-	if (buf_cap-buf_len == 0){
-		size_t ncap;
-		if (buf_cap==0){
-			ncap = BUF_START_SIZE;
-		}else{
-			ncap = buf_cap*2;
-		}
-		buf = (char*)realloc(buf, ncap);
-		if (!buf){
-			return "out of memory";
-		}
-		buf_cap = ncap;
-	}
-	size_t n = read(STDIN_FILENO, buf+(buf_idx+buf_len), buf_cap-(buf_idx+buf_len));
-	if (n <= 0){
-		if (n == 0){
-			if (buf_len>0){
-				return "Protocol error: incomplete command";
-			}
-			return "eof";
-		}
-		return strerror(n);
-	}
-	buf_len+=n;
-	return read_command();
-}
-
-const char *exec_set(){
-	if (args_count!=3){
+error server_exec_set(client *c){
+	const char **argv = client_argv(c);
+	int *argl = client_argl(c);
+	int argc = client_argc(c);
+	if (argc!=3){
 		return "wrong number of arguments for 'set' command";
 	}	
-	std::string key(args[1], args_size[1]);
-	std::string value(args[2], args_size[2]);
+	std::string key(argv[1], argl[1]);
+	std::string value(argv[2], argl[2]);
 	rocksdb::WriteOptions write_options;
 	write_options.sync = true;
 	rocksdb::Status s = db->Put(write_options, key, value);
 	if (!s.ok()){
-		fatal(s.ToString().c_str());
+		panic(s.ToString().c_str());
 	}
-	write_out("+OK\r\n", 5);
+	client_clear(c);
+	client_write(c, "+OK\r\n", 5);
+	client_flush(c);
 	return NULL;
 }
 
-const char *exec_get(){
-	if (args_count!=2){
+error server_exec_get(client *c){
+	const char **argv = client_argv(c);
+	int *argl = client_argl(c);
+	int argc = client_argc(c);
+	if (argc!=2){
 		return "wrong number of arguments for 'get' command";
 	}	
-	std::string key(args[1], args_size[1]);
+	std::string key(argv[1], argl[1]);
 	std::string value;
 	rocksdb::ReadOptions read_options;
 	rocksdb::Status s = db->Get(read_options, key, &value);
 	if (!s.ok()){
 		if (s.IsNotFound()){
-			write_out("$-1\r\n", 5);
+			client_clear(c);
+			client_write(c, "$-1\r\n", 5);
+			client_flush(c);
 			return NULL;
 		}
-		fatal(s.ToString().c_str());
+		panic(s.ToString().c_str());
 	}
-
-	output_clear();
-	output_write_bulk(value.data(), value.size());
-	output_flush();
-
+	client_clear(c);
+	client_write_bulk(c, value.data(), value.size());
+	client_flush(c);
 	return NULL;
 }
 
-const char *exec_del(){
-	if (args_count!=2){
+error server_exec_del(client *c){
+	const char **argv = client_argv(c);
+	int *argl = client_argl(c);
+	int argc = client_argc(c);
+	if (argc!=2){
 		return "wrong number of arguments for 'del' command";
 	}
-	std::string key(args[1], args_size[1]);
+	std::string key(argv[1], argl[1]);
 	std::string value; 
 	rocksdb::Status s = db->Get(rocksdb::ReadOptions(), key, &value);
 	if (!s.ok()){
 		if (s.IsNotFound()){
-			write_out(":0\r\n", 4);
+			client_clear(c);
+			client_write(c, ":0\r\n", 4);
+			client_flush(c);
 			return NULL;
 		}
-		fatal(s.ToString().c_str());
+		panic(s.ToString().c_str());
 	}
 	rocksdb::WriteOptions write_options;
 	write_options.sync = true;
 	s = db->Delete(write_options, key);
 	if (!s.ok()){
-		fatal(s.ToString().c_str());
+		panic(s.ToString().c_str());
 	}
-	write_out(":1\r\n", 4);
+	client_clear(c);
+	client_write(c, ":1\r\n", 4);
+	client_flush(c);
 	return NULL;
 }
 
-const char *exec_quit(){
-	write_out("+OK\r\n", 5);
+error server_exec_quit(client *c){
+	client_clear(c);
+	client_write(c, "+OK\r\n", 5);
+	client_flush(c);
 	exit(0);
 	return NULL;
 }
 
-const char *exec_keys(){
-	if (args_count!=2){
+error server_exec_keys(client *c){
+	return NULL;
+	/*
+	const char **argv = client_argv(c);
+	int *argl = client_argl(c);
+	int argc = client_argc(c);
+	if (argc!=2){
 		return "wrong number of arguments for 'keys' command";
 	}
 
-	output_clear();
-	output_write("012345678901234567890123456789", 30);
+	client_clear(c);
+	client_write(c, "012345678901234567890123456789", 30);
 
 	int count = 0;
 	rocksdb::Iterator* it = db->NewIterator(rocksdb::ReadOptions());
 	for (it->SeekToFirst(); it->Valid(); it->Next()) {
 		rocksdb::Slice key = it->key();
 		if (stringmatchlen(args[1], args_size[1], key.data(), key.size(), 1)){
-			output_write_bulk(key.data(), key.size());
+			client_write_bulk(c, key.data(), key.size());
 			count++;	
 		}
 	}
 	rocksdb::Status s = it->status();
 	if (!s.ok()){
-		fatal(s.ToString().c_str());	
+		panic(s.ToString().c_str());	
 	}
 	delete it;
 	
@@ -426,41 +237,7 @@ const char *exec_keys(){
 	memcpy(output+30-nbn, nb, nbn);
 	write_out(output+30-nbn, output_len-30+nbn);
 	return NULL;
-}
-
-const char *handle_command(){
-	if (args_count==0){
-		return NULL;
-	}
-	if (args_size[0] == 3 && 
-		(args[0][0] == 'S' || args[0][0] == 's') &&
-		(args[0][1] == 'E' || args[0][1] == 'e') &&
-		(args[0][2] == 'T' || args[0][2] == 't')){
-		return exec_set();
-	}else if (args_size[0] == 3 &&
-		(args[0][0] == 'G' || args[0][0] == 'g') &&
-		(args[0][1] == 'E' || args[0][1] == 'e') &&
-		(args[0][2] == 'T' || args[0][2] == 't')){
-		return exec_get();
-	}else if (args_size[0] == 3 &&
-		(args[0][0] == 'D' || args[0][0] == 'd') &&
-		(args[0][1] == 'E' || args[0][1] == 'e') &&
-		(args[0][2] == 'L' || args[0][2] == 'l')){
-		return exec_del();
-	}else if (args_size[0] == 4 &&
-		(args[0][0] == 'Q' || args[0][0] == 'q') &&
-		(args[0][1] == 'U' || args[0][1] == 'u') &&
-		(args[0][2] == 'I' || args[0][2] == 'i') &&
-		(args[0][3] == 'T' || args[0][3] == 't')){
-		return exec_quit();
-	}else if (args_size[0] == 4 &&
-		(args[0][0] == 'K' || args[0][0] == 'k') &&
-		(args[0][1] == 'E' || args[0][1] == 'e') &&
-		(args[0][2] == 'Y' || args[0][2] == 'y') &&
-		(args[0][3] == 'S' || args[0][3] == 's')){
-		return exec_keys();
-	}
-	return err_unknown_command(args[0], args_size[0]);
+	*/
 }
 
 coroutine void connection(int s) {
@@ -552,7 +329,78 @@ coroutine void worker(int count, const char *text) {
     }
 }
 
+
+error server_handle_command(client *c){
+	const char **argv = client_argv(c);
+	int *argl = client_argl(c);
+	int argc = client_argc(c);
+	if (argc==0){
+		return NULL;
+	}
+	if (argl[0] == 3 && 
+		(argv[0][0] == 'S' || argv[0][0] == 's') &&
+		(argv[0][1] == 'E' || argv[0][1] == 'e') &&
+		(argv[0][2] == 'T' || argv[0][2] == 't')){
+		return server_exec_set(c);
+	}else if (argl[0] == 3 &&
+		(argv[0][0] == 'G' || argv[0][0] == 'g') &&
+		(argv[0][1] == 'E' || argv[0][1] == 'e') &&
+		(argv[0][2] == 'T' || argv[0][2] == 't')){
+		return server_exec_get(c);
+	}else if (argl[0] == 3 &&
+		(argv[0][0] == 'D' || argv[0][0] == 'd') &&
+		(argv[0][1] == 'E' || argv[0][1] == 'e') &&
+		(argv[0][2] == 'L' || argv[0][2] == 'l')){
+		return server_exec_del(c);
+	}else if (argl[0] == 4 &&
+		(argv[0][0] == 'Q' || argv[0][0] == 'q') &&
+		(argv[0][1] == 'U' || argv[0][1] == 'u') &&
+		(argv[0][2] == 'I' || argv[0][2] == 'i') &&
+		(argv[0][3] == 'T' || argv[0][3] == 't')){
+		return server_exec_quit(c);
+	}else if (argl[0] == 4 &&
+		(argv[0][0] == 'K' || argv[0][0] == 'k') &&
+		(argv[0][1] == 'E' || argv[0][1] == 'e') &&
+		(argv[0][2] == 'Y' || argv[0][2] == 'y') &&
+		(argv[0][3] == 'S' || argv[0][3] == 's')){
+		return server_exec_keys(c);
+	}
+	return err_unknown_command(argv[0], argl[0]);
+}
+
+int server_run(client_type type){
+	client *c = client_new_pipe();
+	for (;;){
+		const char *err = client_read_command(c);
+		if (err){
+			if (strcmp(err, "eof")==0){
+				return 0;
+			}
+			fprintf(stdout, "-ERR %s\r\n", err);
+			return 1;
+		}
+		err = server_handle_command(c);
+		if (err){
+			if (fprintf(stdout, "-ERR %s\r\n", err) < 0){
+				return 1;
+			}
+		}
+	}
+	return 0;
+}
+
+
 int main(int argc, char *argv[]){
+	const char *dir = "data";
+	rocksdb::Options options;
+	options.create_if_missing = true;
+	rocksdb::Status s = rocksdb::DB::Open(options, dir, &db);
+	if (!s.ok()){
+		panic(s.ToString().c_str());
+	}
+
+	return server_run(CLIENT_PIPE);
+	return 0;
 	/*
 	go(worker(4, "a"));
     go(worker(2, "b"));
@@ -560,7 +408,6 @@ int main(int argc, char *argv[]){
     msleep(now() + 100);
     return 0;
 */
-	const char *dir = "data";
 	const char *bind = "";
 	for (int i=1;i<argc;i++){
 		if (strcmp(argv[i], "-h")==0){
@@ -587,7 +434,8 @@ int main(int argc, char *argv[]){
 	if (strcmp(bind, "")){
 		return run_server(bind);
 	}
-	int opened = 0;
+	/*int opened = 0;
+
 	for (;;){
 		const char *err = read_command();
 		if (err){
@@ -613,5 +461,6 @@ int main(int argc, char *argv[]){
 			}
 		}
 	}
+	*/
 }
 

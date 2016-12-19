@@ -17,12 +17,14 @@ client *client_new_tcp(unixsock tcp);
 void client_free(client *c);
 
 error client_read_command(client *c);
-int client_command_argc(client *c);
-const char *client_command_argv(client *c, int i);
+int client_argc(client *c);
+int *client_argl(client *c);
+const char **client_argv(client *c);
 
 
-void client_write(client *c, void *data, int n);
-void client_write_bulk(client *c, void *data, int n);
+void client_clear(client *c);
+void client_write(client *c, const char *data, int n);
+void client_write_bulk(client *c, const char *data, int n);
 void client_write_multibulk(client *c, int n);
 void client_write_int(client *c, int n);
 void client_flush(client *c);
