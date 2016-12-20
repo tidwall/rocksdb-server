@@ -32,6 +32,7 @@ int run_pipe_server(){
 	return 0;
 }
 
+
 static void forks(){
     for (int i = 1; i < cpus; ++i) {
         pid_t pid = mfork();
