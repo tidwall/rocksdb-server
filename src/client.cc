@@ -42,6 +42,9 @@ void client_free(client *c){
 	if (c->args){
 		free(c->args);
 	}
+	if (c->args_size){
+		free(c->args_size);
+	}
 	if (c->tmp_err){
 		free(c->tmp_err);
 	}
