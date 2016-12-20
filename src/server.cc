@@ -476,18 +476,20 @@ error exec_keys(client2 *c){
 			count++;	
 		}
 	}
+
 	rocksdb::Status s = it->status();
 	if (!s.ok()){
-		panic(s.ToString().c_str());	
+		err(1, "%s", s.ToString().c_str());	
 	}
 	delete it;
-	
+
 	// fill in the header and write from offset.
 	char nb[32];
 	sprintf(nb, "*%d\r\n", count);
 	int nbn = strlen(nb);
 	memcpy(c->output+30-nbn, nb, nbn);
-	c->output_offset = 30;
+	c->output_offset = 30-nbn;
+
 	return NULL;
 }
 error exec_command(client2 *c){
