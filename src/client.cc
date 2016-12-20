@@ -452,9 +452,10 @@ void client_flush_offset(client *c, int offset){
 	if (c->output_len-offset <= 0){
 		return;
 	}
+	int n;
 	switch (c->type){
 	case CLIENT_PIPE:
-		write(STDOUT_FILENO, c->output+offset, c->output_len-offset);
+		n = write(STDOUT_FILENO, c->output+offset, c->output_len-offset);
 		break;
 	case CLIENT_TCP:
 		tcpsend(c->tcp, c->output+offset, c->output_len-offset, -1);

@@ -2,10 +2,15 @@ all: rocksdb libmill
 	@g++ -O2 -std=c++11 \
 		-DROCKSDB_VERSION="\"4.13"\" \
 		-DSERVER_VERSION="\"0.1.0"\" \
-		-I src/rocksdb-4.13/include/ -L src/rocksdb-4.13/ -lrocksdb -lz -lbz2 \
-		-I src/libmill-1.17/build/include/ -L src/libmill-1.17/build/lib/ -lmill \
+		-Isrc/rocksdb-4.13/include/ \
+		-Isrc/libmill-1.17/build/include/ \
+		-pthread \
 		-o rocksdb-server \
-		src/server.cc src/util.cc src/client.cc src/match.cc src/exec.cc
+		src/server.cc src/util.cc src/client.cc src/match.cc src/exec.cc \
+		src/rocksdb-4.13/librocksdb.a \
+		src/rocksdb-4.13/libbz2.a \
+		src/rocksdb-4.13/libz.a \
+		src/libmill-1.17/build/lib/libmill.a
 clean:
 	rm -f rocksdb-server
 	rm -rf src/libmill-1.17/
