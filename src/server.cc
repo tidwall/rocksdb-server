@@ -5,13 +5,17 @@
 #include <libmill.h>
 #include "shared.h"
 
-#ifndef VERSION
-#define VERSION "0.0.0"
+#ifndef ROCKSDB_VERSION
+#define ROCKSDB_VERSION "0.0"
 #endif
 
+#ifndef SERVER_VERSION
+#define SERVER_VERSION "0.0.0"
+#endif
 // db is the globally shared database. 
 rocksdb::DB* db = NULL;
 bool nosync = false;
+int cpus = 1;
 
 // handle_client runs a client lifecycle from a coroutine
 coroutine void handle_client(client *c) {
@@ -28,6 +32,19 @@ int run_pipe_server(){
 	return 0;
 }
 
+static void forks(){
+    for (int i = 1; i < cpus; ++i) {
+        pid_t pid = mfork();
+        if(pid < 0) {
+           perror("Can't create new process");
+		   exit(1);
+        }
+        if(pid == 0) {
+            break;
+        }
+    }
+}
+
 // run_tcp_server starts the TCP server on the specified port
 int run_tcp_server(int port){
 	fprintf(stderr, "00000:M 01 Jan 00:00:00.000 * The server is now ready to accept connections on port %d\n", port);
@@ -37,6 +54,7 @@ int run_tcp_server(int port){
 		perror("tcplisten");
 		exit(1);
 	}
+	forks();
 	while(1) {
 		tcpsock s = tcpaccept(ls, -1);
 		client *c = client_new_tcp(s);
@@ -53,6 +71,7 @@ int run_unix_server(const char *path){
 		perror("unixlisten");
 		exit(1);
 	}
+	forks();
 	while(1) {
 		unixsock s = unixaccept(ls, -1);
 		client *c = client_new_unix(s);
@@ -68,15 +87,16 @@ int main(int argc, char *argv[]){
 	bool unix_path_provided = false;
 	int tcp_port = 0;
 	bool tcp_port_provided = false;
+	bool cpus_provided = false;
 	for (int i=1;i<argc;i++){
 		if (strcmp(argv[i], "-h")==0||
 			strcmp(argv[i], "--help")==0||
 			strcmp(argv[i], "-?")==0){
-			fprintf(stdout, "rocksdb-server version " VERSION "\n");
+			fprintf(stdout, "RocksDB version " ROCKSDB_VERSION ", Server version " SERVER_VERSION "\n");
 			fprintf(stdout, "usage: %s [-d data_path] [-u unix_bind] [-p tcp_port] [--nosync]\n", argv[0]);
 			return 0;
 		}else if (strcmp(argv[i], "--version")==0){
-			fprintf(stdout, "rocksdb-server version " VERSION "\n");
+			fprintf(stdout, "RocksDB version " ROCKSDB_VERSION ", Server version " SERVER_VERSION "\n");
 			return 0;
 		}else if (strcmp(argv[i], "-d")==0){
 			if (i+1 == argc){
@@ -104,11 +124,25 @@ int main(int argc, char *argv[]){
 			}
 			i++;
 			tcp_port_provided = true;
+		}else if (strcmp(argv[i], "--cpus")==0){
+			if (i+1 == argc){
+				fprintf(stderr, "argument missing after: \"%s\"\n", argv[i]);
+				return 1;
+			}
+			cpus = atoi(argv[i+1]);
+			if (cpus <= 0 || cpus > 128){
+				fprintf(stderr, "invalid option '%s' for argument: \"%s\"\n", argv[i+1], argv[i]);
+			}
+			i++;
+			if (cpus != 1){
+				cpus_provided = true;
+			}
 		}else{
 			fprintf(stderr, "unknown option argument: \"%s\"\n", argv[i]);
 			return 1;
 		}
 	}
+	fprintf(stderr, "00000:M 01 Jan 00:00:00.000 # Server started, RocksDB version " ROCKSDB_VERSION ", Server version " SERVER_VERSION "\n");
 	rocksdb::Options options;
 	options.create_if_missing = true;
 	rocksdb::Status s = rocksdb::DB::Open(options, dir, &db);

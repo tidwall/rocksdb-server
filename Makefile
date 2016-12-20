@@ -1,5 +1,7 @@
 all: rocksdb libmill
 	@g++ -O2 -std=c++11 \
+		-DROCKSDB_VERSION="\"4.13"\" \
+		-DSERVER_VERSION="\"0.1.0"\" \
 		-I src/rocksdb-4.13/include/ -L src/rocksdb-4.13/ -lrocksdb -lz -lbz2 \
 		-I src/libmill-1.17/build/include/ -L src/libmill-1.17/build/lib/ -lmill \
 		-o rocksdb-server \

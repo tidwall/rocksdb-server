@@ -29,21 +29,23 @@ typedef struct client_t {
 } client;
 
 void client_free(client *c){
-	if (c){
-		if (c->output){
-			free(c->output);
-		}
-		if (c->buf){
-			free(c->buf);
-		}
-		if (c->args){
-			free(c->args);
-		}
-		if (c->tmp_err){
-			free(c->tmp_err);
-		}
-		free(c);
+	printf("free\n");
+	if (!c){
+		return;
 	}
+	if (c->output){
+		free(c->output);
+	}
+	if (c->buf){
+		free(c->buf);
+	}
+	if (c->args){
+		free(c->args);
+	}
+	if (c->tmp_err){
+		free(c->tmp_err);
+	}
+	free(c);
 }
 
 client *client_new_pipe(){
@@ -83,6 +85,8 @@ void client_close(client *c){
 		return;
 	}
 	c->closed = 1;
+
+	printf("close\n");
 	switch (c->type){
 	case CLIENT_PIPE:
 		exit(0);
@@ -94,6 +98,7 @@ void client_close(client *c){
 		unixclose(c->unix);
 		break;
 	}
+
 }
 
 char *client_raw(client *c){
