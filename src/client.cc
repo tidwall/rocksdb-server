@@ -147,7 +147,7 @@ static void client_err_alloc(client *c, int n){
 }
 
 error client_err_unknown_command(client *c, const char *name, int count){
-	client_err_alloc(c, strlen(name)+64);
+	client_err_alloc(c, count+64);
 	c->tmp_err[0] = 0;
 	strcat(c->tmp_err, "unknown command '");
 	strncat(c->tmp_err, name, count);
