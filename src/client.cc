@@ -29,7 +29,6 @@ typedef struct client_t {
 } client;
 
 void client_free(client *c){
-	printf("free\n");
 	if (!c){
 		return;
 	}
@@ -88,8 +87,6 @@ void client_close(client *c){
 		return;
 	}
 	c->closed = 1;
-
-	printf("close\n");
 	switch (c->type){
 	case CLIENT_PIPE:
 		exit(0);
@@ -260,7 +257,7 @@ const char **client_argv(client *c){
 }
 
 void client_print_args(client *c){
-	printf("args:");
+	printf("args[%d]:", c->args_len);
 	for (int i=0;i<c->args_len;i++){
 		printf(" [");
 		for (int j=0;j<c->args_size[i];j++){
@@ -474,10 +471,15 @@ void client_flush_offset(client *c, int offset){
 
 // client_run tells the server to handle the clients commands.
 error client_run(client *c){
+	int cmds = 0;
 	for (;;){
 		const char *err = client_read_command(c);
 		if (err){
 			if (strcmp(err, "eof")==0){
+				if (cmds<=1){
+					//printf("eof, %d cmds?\n", cmds);
+					//client_print_args(c);
+				}
 				return NULL;
 			}
 			client_clear(c);
@@ -491,6 +493,7 @@ error client_run(client *c){
 			client_write_error(c, err);
 			client_flush(c);
 		}
+		cmds++;
 	}
 	return NULL;
 }

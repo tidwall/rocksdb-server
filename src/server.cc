@@ -12,29 +12,31 @@
 #ifndef SERVER_VERSION
 #define SERVER_VERSION "0.0.0"
 #endif
+
 // db is the globally shared database. 
 rocksdb::DB* db = NULL;
 bool nosync = false;
-int cpus = 1;
+int nprocs = 1;
 
 // handle_client runs a client lifecycle from a coroutine
-coroutine void handle_client(client *c) {
-	client_run(c);
+coroutine void handle_client(client *c, int idx) {
+	//fprintf(stderr, "client[%d]: started\n", idx);
+	error err = client_run(c);
 	client_close(c);
 	client_free(c);
+	//fprintf(stderr, "client[%d]: ended, err: %s\n", idx, err);
 }
 
 // run_pipe_server starts the stdin->stdout IO server
 int run_pipe_server(){
 	fprintf(stderr, "00000:M 01 Jan 00:00:00.000 * The server is now ready to accept commands from stdin\n");
 	client *c = client_new_pipe();
-	handle_client(c);
+	handle_client(c, 0);
 	return 0;
 }
 
-
 static void forks(){
-    for (int i = 1; i < cpus; ++i) {
+    for (int i = 1; i < nprocs; ++i) {
         pid_t pid = mfork();
         if(pid < 0) {
            perror("Can't create new process");
@@ -45,7 +47,6 @@ static void forks(){
         }
     }
 }
-
 // run_tcp_server starts the TCP server on the specified port
 int run_tcp_server(int port){
 	fprintf(stderr, "00000:M 01 Jan 00:00:00.000 * The server is now ready to accept connections on port %d\n", port);
@@ -56,10 +57,12 @@ int run_tcp_server(int port){
 		exit(1);
 	}
 	forks();
+	int idx = 0;
 	while(1) {
 		tcpsock s = tcpaccept(ls, -1);
 		client *c = client_new_tcp(s);
-		go(handle_client(c));
+		go(handle_client(c, idx));
+		idx++;
 	}
 	return 0;
 }
@@ -73,10 +76,12 @@ int run_unix_server(const char *path){
 		exit(1);
 	}
 	forks();
+	int idx = 0;
 	while(1) {
 		unixsock s = unixaccept(ls, -1);
 		client *c = client_new_unix(s);
-		go(handle_client(c));
+		go(handle_client(c, idx));
+		idx++;
 	}
 	return 0;
 }
@@ -86,9 +91,10 @@ int main(int argc, char *argv[]){
 	const char *dir = "data";
 	const char *unix_path = "";
 	bool unix_path_provided = false;
-	int tcp_port = 0;
+	int tcp_port = 5555;
 	bool tcp_port_provided = false;
 	bool cpus_provided = false;
+	bool piped = false;
 	for (int i=1;i<argc;i++){
 		if (strcmp(argv[i], "-h")==0||
 			strcmp(argv[i], "--help")==0||
@@ -125,17 +131,19 @@ int main(int argc, char *argv[]){
 			}
 			i++;
 			tcp_port_provided = true;
-		}else if (strcmp(argv[i], "--cpus")==0){
+		}else if (strcmp(argv[i], "-")==0){
+			piped = true;
+		}else if (strcmp(argv[i], "--nprocs")==0){
 			if (i+1 == argc){
 				fprintf(stderr, "argument missing after: \"%s\"\n", argv[i]);
 				return 1;
 			}
-			cpus = atoi(argv[i+1]);
-			if (cpus <= 0 || cpus > 128){
+			nprocs = atoi(argv[i+1]);
+			if (nprocs <= 0 || nprocs > 128){
 				fprintf(stderr, "invalid option '%s' for argument: \"%s\"\n", argv[i+1], argv[i]);
 			}
 			i++;
-			if (cpus != 1){
+			if (nprocs != 1){
 				cpus_provided = true;
 			}
 		}else{
@@ -153,8 +161,8 @@ int main(int argc, char *argv[]){
 	if (unix_path_provided){
 		return run_unix_server(unix_path);
 	}
-	if (tcp_port_provided){
-		return run_tcp_server(tcp_port);
+	if (piped){
+		return run_pipe_server();
 	}
-	return run_pipe_server();
+	return run_tcp_server(tcp_port);
 }

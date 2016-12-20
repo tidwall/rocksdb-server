@@ -1,6 +1,8 @@
 #include <rocksdb/db.h>
 #include "shared.h"
 
+const bool BLIND = false;
+
 // rocksdb is multithreaded without any extra syncronization.
 // https://github.com/facebook/rocksdb/wiki/Basic-Operations#concurrency
 extern rocksdb::DB* db;
@@ -9,7 +11,7 @@ error exec_command(client *c){
 	const char **argv = client_argv(c);
 	int *argl = client_argl(c);
 	int argc = client_argc(c);
-	if (argc==0){
+	if (argc==0||(argc==1&&argl[0]==0)){
 		return NULL;
 	}
 	if (argl[0] == 3 && 
@@ -44,6 +46,13 @@ error exec_command(client *c){
 }
 
 error exec_set(client *c){
+	if (BLIND){
+	//	printf("123\n");
+		client_clear(c);
+		client_write(c, "+OK\r\n", 5);
+		client_flush(c);
+		return NULL;
+	}
 	const char **argv = client_argv(c);
 	int *argl = client_argl(c);
 	int argc = client_argc(c);
