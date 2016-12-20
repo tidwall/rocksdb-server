@@ -16,8 +16,9 @@ enum client_type {CLIENT_PIPE, CLIENT_TCP, CLIENT_UNIX};
 
 client *client_new_pipe();
 client *client_new_unix(unixsock unix);
-client *client_new_tcp(unixsock tcp);
+client *client_new_tcp(tcpsock tcp);
 void client_free(client *c);
+void client_close(client *c);
 
 error client_read_command(client *c);
 int client_argc(client *c);

@@ -125,7 +125,7 @@ error exec_quit(client *c){
 	client_clear(c);
 	client_write(c, "+OK\r\n", 5);
 	client_flush(c);
-	exit(0);
+	client_close(c);
 	return NULL;
 }
 
@@ -138,6 +138,8 @@ error exec_keys(client *c){
 	}
 
 	client_clear(c);
+	// to avoid double-buffering, prewrite some bytes and then we'll go back 
+	// and fill it in with correctness.
 	client_write(c, "012345678901234567890123456789", 30);
 
 	int count = 0;

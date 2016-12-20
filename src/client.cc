@@ -25,6 +25,7 @@ typedef struct client_t {
 
 	char *tmp_err; // storing a temporary error
 
+	int closed;
 } client;
 
 void client_free(client *c){
@@ -66,15 +67,33 @@ client *client_new_unix(unixsock unix){
 	return c;
 }
 
-client *client_new_tcp(unixsock tcp){
+client *client_new_tcp(tcpsock tcp){
 	client *c = (client*)malloc(sizeof(client));
 	if (!c){
 		return NULL;
 	}
 	memset(c, 0, sizeof(client));
 	c->type = CLIENT_TCP;
-	c->unix = tcp;
+	c->tcp = tcp;
 	return c;
+}
+
+void client_close(client *c){
+	if (c->closed){
+		return;
+	}
+	c->closed = 1;
+	switch (c->type){
+	case CLIENT_PIPE:
+		exit(0);
+		break;
+	case CLIENT_TCP:
+		tcpclose(c->tcp);
+		break;
+	case CLIENT_UNIX:
+		unixclose(c->unix);
+		break;
+	}
 }
 
 char *client_raw(client *c){
@@ -85,7 +104,7 @@ int client_raw_len(client *c){
 	return c->output_len;
 }
 
-error client_read(client *c, void *buf, int nbyte){
+static error client_read(client *c, void *buf, int nbyte, int *nread){
 	int n;
 	switch (c->type){
 	default:
@@ -95,13 +114,14 @@ error client_read(client *c, void *buf, int nbyte){
 		n = read(STDIN_FILENO, buf, nbyte);
 		break;
 	case CLIENT_TCP:
-		n = tcprecv(c->tcp, buf, nbyte, -1);
+		n = tcprecvuntil(c->tcp, buf, nbyte, "\n", 1, -1);
 		break;
 	case CLIENT_UNIX:
-		n = unixrecv(c->unix, buf, nbyte, -1);
+		n = unixrecvuntil(c->unix, buf, nbyte, "\n", 1, -1);
 		break;
 	}
-	if (n != nbyte){
+	*nread = n;
+	if (n <= 0){
 		if (n == 0){
 			return "eof";
 		}
@@ -177,6 +197,7 @@ static error client_parse_telnet_command(client *c){
 				if (c->buf[i] == b){
 					if (i+1>=z||c->buf[i+1]==' '||c->buf[i+1]=='\r'||c->buf[i+1]=='\n'){
 						client_append_arg(c, c->buf+s, i-s);
+						i--;
 					}else{
 						return "Protocol error: unbalanced quotes in request";
 					}
@@ -230,7 +251,20 @@ const char **client_argv(client *c){
 	return c->args;
 }
 
+void client_print_args(client *c){
+	printf("args:");
+	for (int i=0;i<c->args_len;i++){
+		printf(" [");
+		for (int j=0;j<c->args_size[i];j++){
+			printf("%c", c->args[i][j]);
+		}
+		printf("]");
+	}
+	printf("\n");
+}
+
 static error client_parse_command(client *c){
+	c->args_len = 0;
 	size_t i = c->buf_idx;
 	size_t z = c->buf_idx+c->buf_len;
 	if (i >= z){
@@ -312,8 +346,9 @@ static error client_parse_command(client *c){
 }
 
 error client_read_command(client *c){
-	const char *err = client_parse_command(c);
+	error err = client_parse_command(c);
 	if (err == NULL){
+		//client_print_args(c);
 		return NULL;
 	}
 	if (strcmp(err, "incomplete") != 0){
@@ -330,17 +365,14 @@ error client_read_command(client *c){
 		if (!c->buf){
 			panic("out of memory");
 		}
-	//	memset(c->buf+c->buf_idx+c->buf_len, 0, c->buf_cap-c->buf_idx-c->buf_len);
 	}
-	size_t n = read(STDIN_FILENO, c->buf+c->buf_idx+c->buf_len, c->buf_cap-c->buf_idx-c->buf_len);
-	if (n <= 0){
-		if (n == 0){
-			if (c->buf_len>0){
-				return "Protocol error: incomplete command";
-			}
-			return "eof";
+	int n = 0;
+	err = client_read(c, c->buf+c->buf_idx+c->buf_len, c->buf_cap-c->buf_idx-c->buf_len, &n);
+	if (err){
+		if (c->buf_len>0){
+			return "Protocol error: incomplete command";
 		}
-		return strerror(n);
+		return err;
 	}
 	c->buf_len+=n;
 	return client_read_command(c);
