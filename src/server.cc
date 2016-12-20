@@ -10,9 +10,8 @@
 #endif
 
 // db is the globally shared database. 
-// this should be the only global variable and according to the RocksDB
-// documention, it's totally thread-safe. Sweet!
 rocksdb::DB* db = NULL;
+bool nosync = false;
 
 // handle_client runs a client lifecycle from a coroutine
 coroutine void handle_client(client *c) {
@@ -23,6 +22,7 @@ coroutine void handle_client(client *c) {
 
 // run_pipe_server starts the stdin->stdout IO server
 int run_pipe_server(){
+	fprintf(stderr, "00000:M 01 Jan 00:00:00.000 * The server is now ready to accept commands from stdin\n");
 	client *c = client_new_pipe();
 	handle_client(c);
 	return 0;
@@ -30,6 +30,7 @@ int run_pipe_server(){
 
 // run_tcp_server starts the TCP server on the specified port
 int run_tcp_server(int port){
+	fprintf(stderr, "00000:M 01 Jan 00:00:00.000 * The server is now ready to accept connections on port %d\n", port);
 	ipaddr addr = iplocal(NULL, port, 0);
 	tcpsock ls = tcplisten(addr, 10);
 	if (!ls){
@@ -46,6 +47,7 @@ int run_tcp_server(int port){
 
 // run_unix_server starts the Unix Domains server on the specified path
 int run_unix_server(const char *path){
+	fprintf(stderr, "00000:M 01 Jan 00:00:00.000 * The server is now ready to accept connections at \"%s\"\n", path);
 	unixsock ls = unixlisten(path, -1);
 	if (!ls){
 		perror("unixlisten");
@@ -67,9 +69,14 @@ int main(int argc, char *argv[]){
 	int tcp_port = 0;
 	bool tcp_port_provided = false;
 	for (int i=1;i<argc;i++){
-		if (strcmp(argv[i], "-h")==0){
-			fprintf(stdout, "rdbp - RocksDB Piper " VERSION "\n");
-			fprintf(stdout, "usage: %s [-d data_path] [-b unix_bind]\n", argv[0]);
+		if (strcmp(argv[i], "-h")==0||
+			strcmp(argv[i], "--help")==0||
+			strcmp(argv[i], "-?")==0){
+			fprintf(stdout, "rocksdb-server version " VERSION "\n");
+			fprintf(stdout, "usage: %s [-d data_path] [-u unix_bind] [-p tcp_port] [--nosync]\n", argv[0]);
+			return 0;
+		}else if (strcmp(argv[i], "--version")==0){
+			fprintf(stdout, "rocksdb-server version " VERSION "\n");
 			return 0;
 		}else if (strcmp(argv[i], "-d")==0){
 			if (i+1 == argc){
@@ -77,6 +84,8 @@ int main(int argc, char *argv[]){
 				return 1;
 			}
 			dir = argv[++i];
+		}else if (strcmp(argv[i], "--nosync")==0){
+			nosync = true;
 		}else if (strcmp(argv[i], "-u")==0){
 			if (i+1 == argc){
 				fprintf(stderr, "argument missing after: \"%s\"\n", argv[i]);
@@ -114,4 +123,3 @@ int main(int argc, char *argv[]){
 	}
 	return run_pipe_server();
 }
-

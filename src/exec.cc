@@ -53,7 +53,7 @@ error exec_set(client *c){
 	std::string key(argv[1], argl[1]);
 	std::string value(argv[2], argl[2]);
 	rocksdb::WriteOptions write_options;
-	write_options.sync = true;
+	write_options.sync = !nosync;
 	rocksdb::Status s = db->Put(write_options, key, value);
 	if (!s.ok()){
 		panic(s.ToString().c_str());
@@ -110,7 +110,7 @@ error exec_del(client *c){
 		panic(s.ToString().c_str());
 	}
 	rocksdb::WriteOptions write_options;
-	write_options.sync = true;
+	write_options.sync = !nosync;
 	s = db->Delete(write_options, key);
 	if (!s.ok()){
 		panic(s.ToString().c_str());
