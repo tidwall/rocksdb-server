@@ -9,6 +9,10 @@
 #define ROCKSDB_VERSION "0.0"
 #endif
 
+#ifndef LIBEVENT_VERSION
+#define LIBEVENT_VERSION "0.0"
+#endif
+
 #ifndef SERVER_VERSION
 #define SERVER_VERSION "0.0.0"
 #endif
@@ -87,7 +91,7 @@ int run_unix_server(const char *path){
 }
 
 // main is the process entry point
-int main(int argc, char *argv[]){
+int main2(int argc, char *argv[]){
 	const char *dir = "data";
 	const char *unix_path = "";
 	bool unix_path_provided = false;
@@ -99,11 +103,11 @@ int main(int argc, char *argv[]){
 		if (strcmp(argv[i], "-h")==0||
 			strcmp(argv[i], "--help")==0||
 			strcmp(argv[i], "-?")==0){
-			fprintf(stdout, "RocksDB version " ROCKSDB_VERSION ", Server version " SERVER_VERSION "\n");
+			fprintf(stdout, "RocksDB version " ROCKSDB_VERSION ", Libevent version " LIBEVENT_VERSION ", Server version " SERVER_VERSION "\n");
 			fprintf(stdout, "usage: %s [-d data_path] [-u unix_bind] [-p tcp_port] [--nosync]\n", argv[0]);
 			return 0;
 		}else if (strcmp(argv[i], "--version")==0){
-			fprintf(stdout, "RocksDB version " ROCKSDB_VERSION ", Server version " SERVER_VERSION "\n");
+			fprintf(stdout, "RocksDB version " ROCKSDB_VERSION ", Libevent version " LIBEVENT_VERSION ", Server version " SERVER_VERSION "\n");
 			return 0;
 		}else if (strcmp(argv[i], "-d")==0){
 			if (i+1 == argc){
@@ -151,7 +155,7 @@ int main(int argc, char *argv[]){
 			return 1;
 		}
 	}
-	fprintf(stderr, "00000:M 01 Jan 00:00:00.000 # Server started, RocksDB version " ROCKSDB_VERSION ", Server version " SERVER_VERSION "\n");
+	fprintf(stderr, "00000:M 01 Jan 00:00:00.000 # Server started, RocksDB version " ROCKSDB_VERSION ", Libevent version " LIBEVENT_VERSION ", Server version " SERVER_VERSION "\n");
 	rocksdb::Options options;
 	options.create_if_missing = true;
 	rocksdb::Status s = rocksdb::DB::Open(options, dir, &db);
