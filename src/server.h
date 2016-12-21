@@ -1,9 +1,10 @@
 #ifndef SERVER_H
 
-#include <uv.h>
+#include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <err.h>
+#include <uv.h>
 #include <rocksdb/db.h>
 
 extern rocksdb::DB* db;
@@ -18,6 +19,8 @@ void log(char c, const char *format, ...);
 
 int stringmatchlen(const char *pattern, int patternLen,
         const char *string, int stringLen, int nocase);
+void flushdb();
+int remove_directory(const char *path);
 
 typedef const char *error;
 
@@ -62,5 +65,5 @@ bool client_exec_commands(client *c);
 
 error exec_command(client *c);
 
-#endif // SERVER_H
 
+#endif // SERVER_H

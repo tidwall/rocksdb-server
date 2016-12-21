@@ -1,10 +1,11 @@
-#include <unistd.h>
 #include "server.h"
 
 rocksdb::DB* db = NULL;
 bool nosync = false;
 int nprocs = 1;
 uv_loop_t *loop = NULL;
+bool inmem = false;
+const char *dir = "data";
 
 const char *ERR_INCOMPLETE = "incomplete";
 const char *ERR_QUIT = "quit";
@@ -106,11 +107,29 @@ void log(char c, const char *format, ...){
 	va_end(args);
 }
 
+void opendb(){
+	rocksdb::Options options;
+	options.create_if_missing = true;
+	if (inmem){
+		options.env = rocksdb::NewMemEnv(rocksdb::Env::Default());
+	}
+	rocksdb::Status s = rocksdb::DB::Open(options, dir, &db);
+	if (!s.ok()){
+		err(1, "%s", s.ToString().c_str());
+	}
+}
+
+void flushdb(){
+	delete db;
+	if (remove_directory(dir)){
+		err(1, "remove_directory");
+	}
+	opendb();
+}
+
 int main(int argc, char **argv) {
-	const char *dir = "data";
 	int tcp_port = 5555;
 	bool tcp_port_provided = false;
-	bool inmem = false;
 	for (int i=1;i<argc;i++){
 		if (strcmp(argv[i], "-h")==0||
 			strcmp(argv[i], "--help")==0||
@@ -148,15 +167,7 @@ int main(int argc, char **argv) {
 		}
 	}
 	log('#', "Server started, RocksDB version " ROCKSDB_VERSION ", Libuv version " LIBUV_VERSION ", Server version " SERVER_VERSION);
-	rocksdb::Options options;
-	options.create_if_missing = true;
-	if (inmem){
-		options.env = rocksdb::NewMemEnv(rocksdb::Env::Default());
-	}
-	rocksdb::Status s = rocksdb::DB::Open(options, dir, &db);
-	if (!s.ok()){
-		err(1, "%s", s.ToString().c_str());
-	}
+	opendb();
 
 	uv_tcp_t server;
 	loop = uv_default_loop();

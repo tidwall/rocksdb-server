@@ -73,6 +73,15 @@ error exec_quit(client *c){
 	return ERR_QUIT;
 }
 
+error exec_flushdb(client *c){
+	if (c->args_len!=1){
+		return "wrong number of arguments for 'flushdb' command";
+	}
+	flushdb();
+	client_write(c, "+OK\r\n", 5);
+	return NULL;
+}
+
 error exec_keys(client *c){
 	const char **argv = c->args;
 	int *argl = c->args_size;
@@ -110,40 +119,34 @@ error exec_keys(client *c){
 
 	return NULL;
 }
+
+static bool iscmd(client *c, const char *cmd){
+	int i = 0;
+	for (;i<c->args_size[0];i++){
+		if (c->args[0][i] != cmd[i] && c->args[0][i] != cmd[i]-32){
+			return false;
+		}
+	}
+	return !cmd[i];
+}
+
 error exec_command(client *c){
-	const char **argv = c->args;
-	int *argl = c->args_size;
-	int argc = c->args_len;
-	if (argc==0||(argc==1&&argl[0]==0)){
+	if (c->args_len==0||(c->args_len==1&&c->args_size[0]==0)){
 		return NULL;
 	}
-	if (argl[0] == 3 && 
-		(argv[0][0] == 'S' || argv[0][0] == 's') &&
-		(argv[0][1] == 'E' || argv[0][1] == 'e') &&
-		(argv[0][2] == 'T' || argv[0][2] == 't')){
+	if (iscmd(c, "set")){
 		return exec_set(c);
-	}else if (argl[0] == 3 &&
-		(argv[0][0] == 'G' || argv[0][0] == 'g') &&
-		(argv[0][1] == 'E' || argv[0][1] == 'e') &&
-		(argv[0][2] == 'T' || argv[0][2] == 't')){
+	}else if (iscmd(c, "get")){
 		return exec_get(c);
-	}else if (argl[0] == 3 &&
-		(argv[0][0] == 'D' || argv[0][0] == 'd') &&
-		(argv[0][1] == 'E' || argv[0][1] == 'e') &&
-		(argv[0][2] == 'L' || argv[0][2] == 'l')){
+	}else if (iscmd(c, "del")){
 		return exec_del(c);
-	}else if (argl[0] == 4 &&
-		(argv[0][0] == 'Q' || argv[0][0] == 'q') &&
-		(argv[0][1] == 'U' || argv[0][1] == 'u') &&
-		(argv[0][2] == 'I' || argv[0][2] == 'i') &&
-		(argv[0][3] == 'T' || argv[0][3] == 't')){
+	}else if (iscmd(c, "quit")){
 		return exec_quit(c);
-	}else if (argl[0] == 4 &&
-		(argv[0][0] == 'K' || argv[0][0] == 'k') &&
-		(argv[0][1] == 'E' || argv[0][1] == 'e') &&
-		(argv[0][2] == 'Y' || argv[0][2] == 'y') &&
-		(argv[0][3] == 'S' || argv[0][3] == 's')){
+	}else if (iscmd(c, "keys")){
 		return exec_keys(c);
+	}else if (iscmd(c, "flushdb")){
+		return exec_flushdb(c);
 	}
-	return client_err_unknown_command(c, argv[0], argl[0]);
+	return client_err_unknown_command(c, c->args[0], c->args_size[0]);
 }
+

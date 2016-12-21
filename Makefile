@@ -7,7 +7,7 @@ all: rocksdb libuv
 		-Isrc/libuv-1.10.1/build/include/ \
 		-pthread \
 		-o rocksdb-server \
-		src/server.cc src/client.cc src/exec.cc src/match.cc \
+		src/server.cc src/client.cc src/exec.cc src/match.cc src/util.cc \
 		src/rocksdb-4.13/librocksdb.a \
 		src/rocksdb-4.13/libbz2.a \
 		src/rocksdb-4.13/libz.a \
