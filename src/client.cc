@@ -1,39 +1,17 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <libmill.h>
-#include "shared.h"
+#include "server.h"
 
-typedef struct client_t {
-	client_type type;
-	tcpsock tcp;
-	unixsock unix;
-
-	char *output;
-	int output_len;
-	int output_cap;
-
-	char *buf;   
-	int buf_cap; 
-	int buf_len; 
-	int buf_idx;
-
-	const char **args;
-	int args_cap;
-	int args_len;
-	int *args_size;
-
-	char *tmp_err; // storing a temporary error
-
-	int closed;
-} client;
+client *client_new(){
+	client *c = (client*)calloc(1, sizeof(client));
+	if (!c){
+		err(1, "malloc");
+	}
+	c->worker.data = c; // self reference
+	return c;
+}
 
 void client_free(client *c){
 	if (!c){
 		return;
-	}
-	if (c->output){
-		free(c->output);
 	}
 	if (c->buf){
 		free(c->buf);
@@ -44,98 +22,101 @@ void client_free(client *c){
 	if (c->args_size){
 		free(c->args_size);
 	}
+	if (c->output){
+		free(c->output);
+	}
 	if (c->tmp_err){
 		free(c->tmp_err);
 	}
 	free(c);
 }
 
-client *client_new_pipe(){
-	client *c = (client*)malloc(sizeof(client));
-	if (!c){
-		return NULL;
-	}
-	memset(c, 0, sizeof(client));
-	c->type = CLIENT_PIPE;
-	return c;
-}
-
-client *client_new_unix(unixsock unix){
-	client *c = (client*)malloc(sizeof(client));
-	if (!c){
-		return NULL;
-	}
-	memset(c, 0, sizeof(client));
-	c->type = CLIENT_UNIX;
-	c->unix = unix;
-	return c;
-}
-
-client *client_new_tcp(tcpsock tcp){
-	client *c = (client*)malloc(sizeof(client));
-	if (!c){
-		return NULL;
-	}
-	memset(c, 0, sizeof(client));
-	c->type = CLIENT_TCP;
-	c->tcp = tcp;
-	return c;
+void on_close(uv_handle_t *stream){
+	client_free((client*)stream);
 }
 
 void client_close(client *c){
-	if (c->closed){
+	uv_close((uv_handle_t *)&c->tcp, on_close);
+}
+inline void client_output_require(client *c, size_t siz){
+	if (c->output_cap < siz){
+		while (c->output_cap < siz){
+			if (c->output_cap == 0){
+				c->output_cap = 1;
+			}else{
+				c->output_cap *= 2;
+			}
+		}
+		c->output = (char*)realloc(c->output, c->output_cap);
+		if (!c->output){
+			err(1, "malloc");
+		}
+	}
+}
+void client_write(client *c, const char *data, int n){
+	client_output_require(c, c->output_len+n);
+	memcpy(c->output+c->output_len, data, n);	
+	c->output_len+=n;
+}
+
+void client_clear(client *c){
+	c->output_len = 0;
+	c->output_offset = 0;
+}
+
+void client_write_byte(client *c, char b){
+	client_output_require(c, c->output_len+1);
+	c->output[c->output_len++] = b;
+}
+
+void client_write_bulk(client *c, const char *data, int n){
+	char h[32];
+	sprintf(h, "$%d\r\n", n);
+	client_write(c, h, strlen(h));
+	client_write(c, data, n);
+	client_write_byte(c, '\r');
+	client_write_byte(c, '\n');
+}
+
+void client_write_multibulk(client *c, int n){
+	char h[32];
+	sprintf(h, "*%d\r\n", n);
+	client_write(c, h, strlen(h));
+}
+
+void client_write_int(client *c, int n){
+	char h[32];
+	sprintf(h, ":%d\r\n", n);
+	client_write(c, h, strlen(h));
+}
+
+void client_write_error(client *c, error err){
+	client_write(c, "-ERR ", 5);
+	client_write(c, err, strlen(err));
+	client_write_byte(c, '\r');
+	client_write_byte(c, '\n');
+}
+
+
+void client_flush_offset(client *c, int offset){
+	if (c->output_len-offset <= 0){
 		return;
 	}
-	c->closed = 1;
-	switch (c->type){
-	case CLIENT_PIPE:
-		exit(0);
-		break;
-	case CLIENT_TCP:
-		tcpclose(c->tcp);
-		break;
-	case CLIENT_UNIX:
-		unixclose(c->unix);
-		break;
-	}
-
+	uv_buf_t buf = {0};
+	buf.base = c->output+offset;
+	buf.len = c->output_len-offset;
+	uv_write(&c->req, (uv_stream_t *)&c->tcp, &buf, 1, NULL);
+	c->output_len = 0;
 }
 
-char *client_raw(client *c){
-	return c->output;
+
+// client_flush flushes the bytes to the client output stream. it does not
+// check for errors because the client read operations handle socket errors.
+void client_flush(client *c){
+	client_flush_offset(c, 0);
 }
 
-int client_raw_len(client *c){
-	return c->output_len;
-}
-
-static error client_read(client *c, void *buf, int nbyte, int *nread){
-	int n;
-	switch (c->type){
-	default:
-		n = -1;
-		break;
-	case CLIENT_PIPE:
-		n = read(STDIN_FILENO, buf, nbyte);
-		break;
-	case CLIENT_TCP:
-		n = tcprecvuntil(c->tcp, buf, nbyte, "\n", 1, -1);
-		break;
-	case CLIENT_UNIX:
-		n = unixrecvuntil(c->unix, buf, nbyte, "\n", 1, -1);
-		break;
-	}
-	*nread = n;
-	if (n <= 0){
-		if (n == 0){
-			return "eof";
-		}
-		return "bad read";
-	}
-	return NULL;
-}
-
-static void client_err_alloc(client *c, int n){
+void client_err_alloc(client *c, int n){
 	if (c->tmp_err){
 		free(c->tmp_err);
 	}
@@ -146,6 +127,12 @@ static void client_err_alloc(client *c, int n){
 	memset(c->tmp_err, 0, n);
 }
 
+error client_err_expected_got(client *c, char c1, char c2){
+	client_err_alloc(c, 64);
+	sprintf(c->tmp_err, "Protocol error: expected '%c', got '%c'", c1, c2);
+	return c->tmp_err;
+}
+
 error client_err_unknown_command(client *c, const char *name, int count){
 	client_err_alloc(c, count+64);
 	c->tmp_err[0] = 0;
@@ -154,14 +141,7 @@ error client_err_unknown_command(client *c, const char *name, int count){
 	strcat(c->tmp_err, "'");
 	return c->tmp_err;
 }
-
-error client_err_expected_got(client *c, char c1, char c2){
-	client_err_alloc(c, 64);
-	sprintf(c->tmp_err, "Protocol error: expected '%c', got '%c'", c1, c2);
-	return c->tmp_err;
-}
-
-static void client_append_arg(client *c, const char *data, int nbyte){
+void client_append_arg(client *c, const char *data, int nbyte){
 	if (c->args_cap==c->args_len){
 		if (c->args_cap==0){
 			c->args_cap=1;
@@ -181,11 +161,12 @@ static void client_append_arg(client *c, const char *data, int nbyte){
 	c->args_size[c->args_len] = nbyte;
 	c->args_len++;
 }
-static error client_parse_telnet_command(client *c){
+
+error client_parse_telnet_command(client *c){
 	size_t i = c->buf_idx;
 	size_t z = c->buf_len+c->buf_idx;
 	if (i >= z){
-		return "incomplete";
+		return ERR_INCOMPLETE;
 	}
 	c->args_len = 0;
 	size_t s = i;
@@ -243,37 +224,15 @@ static error client_parse_telnet_command(client *c){
 			}
 		}
 	}
-	return "incomplete";
+	return ERR_INCOMPLETE;
 }
 
-int client_argc(client *c){
-	return c->args_len;
-}
-int *client_argl(client *c){
-	return c->args_size;
-}
-const char **client_argv(client *c){
-	return c->args;
-}
-
-void client_print_args(client *c){
-	printf("args[%d]:", c->args_len);
-	for (int i=0;i<c->args_len;i++){
-		printf(" [");
-		for (int j=0;j<c->args_size[i];j++){
-			printf("%c", c->args[i][j]);
-		}
-		printf("]");
-	}
-	printf("\n");
-}
-
-static error client_parse_command(client *c){
+error client_read_command(client *c){
 	c->args_len = 0;
 	size_t i = c->buf_idx;
 	size_t z = c->buf_idx+c->buf_len;
 	if (i >= z){
-		return "incomplete";
+		return ERR_INCOMPLETE;
 	}
 	if (c->buf[i] != '*'){
 		return client_parse_telnet_command(c);
@@ -299,11 +258,11 @@ static error client_parse_command(client *c){
 		}
 	}
 	if (i >= z){
-		return "incomplete";
+		return ERR_INCOMPLETE;
 	}
 	for (int j=0;j<args_len;j++){
 		if (i >= z){
-			return "incomplete";
+			return ERR_INCOMPLETE;
 		}
 		if (c->buf[i] != '$'){
 			return client_err_expected_got(c, '$', c->buf[i]);
@@ -326,7 +285,7 @@ static error client_parse_command(client *c){
 				}
 				i++;
 				if (z-i < nsiz+2){
-					return "incomplete";
+					return ERR_INCOMPLETE;
 				}
 				s = i;
 				if (c->buf[s+nsiz] != '\r'){
@@ -350,150 +309,36 @@ static error client_parse_command(client *c){
 	return NULL;
 }
 
-error client_read_command(client *c){
-	error err = client_parse_command(c);
-	if (err == NULL){
-		//client_print_args(c);
-		return NULL;
-	}
-	if (strcmp(err, "incomplete") != 0){
-		return err;
-	}
-	// read into buffer
-	if (c->buf_cap-c->buf_len == 0){
-		if (c->buf_cap==0){
-			c->buf_cap = 1;
-		}else{
-			c->buf_cap*=2;
+void client_print_args(client *c){
+	printf("args[%d]:", c->args_len);
+	for (int i=0;i<c->args_len;i++){
+		printf(" [");
+		for (int j=0;j<c->args_size[i];j++){
+			printf("%c", c->args[i][j]);
 		}
-		c->buf = (char*)realloc(c->buf, c->buf_cap);
-		if (!c->buf){
-			panic("out of memory");
-		}
+		printf("]");
 	}
-	int n = 0;
-	err = client_read(c, c->buf+c->buf_idx+c->buf_len, c->buf_cap-c->buf_idx-c->buf_len, &n);
-	if (err){
-		if (c->buf_len>0){
-			return "Protocol error: incomplete command";
-		}
-		return err;
-	}
-	c->buf_len+=n;
-	return client_read_command(c);
+	printf("\n");
 }
 
-static inline void client_output_require(client *c, size_t siz){
-	if (c->output_cap < siz){
-		while (c->output_cap < siz){
-			if (c->output_cap == 0){
-				c->output_cap = 1;
-			}else{
-				c->output_cap *= 2;
-			}
-		}
-		c->output = (char*)realloc(c->output, c->output_cap);
-		if (!c->output){
-			panic("out of memory");
-		}
-	}
-}
-
-void client_clear(client *c){
-	c->output_len = 0;
-}
-
-static void client_write_byte(client *c, char b){
-	client_output_require(c, c->output_len+1);
-	c->output[c->output_len++] = b;
-}
-
-void client_write(client *c, const char *data, int n){
-	client_output_require(c, c->output_len+n);
-	memcpy(c->output+c->output_len, data, n);	
-	c->output_len+=n;
-}
-
-void client_write_bulk(client *c, const char *data, int n){
-	char h[32];
-	sprintf(h, "$%d\r\n", n);
-	client_write(c, h, strlen(h));
-	client_write(c, data, n);
-	client_write_byte(c, '\r');
-	client_write_byte(c, '\n');
-}
-
-void client_write_multibulk(client *c, int n){
-	char h[32];
-	sprintf(h, "*%d\r\n", n);
-	client_write(c, h, strlen(h));
-}
-
-void client_write_int(client *c, int n){
-	char h[32];
-	sprintf(h, ":%d\r\n", n);
-	client_write(c, h, strlen(h));
-}
-
-void client_write_error(client *c, error err){
-	client_write(c, "-ERR ", 5);
-	client_write(c, err, strlen(err));
-	client_write_byte(c, '\r');
-	client_write_byte(c, '\n');
-}
-
-// client_flush flushes the bytes to the client output stream. it does not
-// check for errors because the client read operations handle socket errors.
-void client_flush(client *c){
-	client_flush_offset(c, 0);
-}
-
-void client_flush_offset(client *c, int offset){
-	if (c->output_len-offset <= 0){
-		return;
-	}
-	int n;
-	switch (c->type){
-	case CLIENT_PIPE:
-		n = write(STDOUT_FILENO, c->output+offset, c->output_len-offset);
-		break;
-	case CLIENT_TCP:
-		tcpsend(c->tcp, c->output+offset, c->output_len-offset, -1);
-		tcpflush(c->tcp, -1);
-		break;
-	case CLIENT_UNIX:
-		unixsend(c->unix, c->output+offset, c->output_len-offset, -1);
-		unixflush(c->unix, -1);
-		break;
-	}
-	c->output_len = 0;
-}
-
-// client_run tells the server to handle the clients commands.
-error client_run(client *c){
-	int cmds = 0;
+bool client_exec_commands(client *c){
 	for (;;){
-		const char *err = client_read_command(c);
-		if (err){
-			if (strcmp(err, "eof")==0){
-				if (cmds<=1){
-					//printf("eof, %d cmds?\n", cmds);
-					//client_print_args(c);
-				}
-				return NULL;
+		error err = client_read_command(c);
+		if (err != NULL){
+			if ((char*)err == (char*)ERR_INCOMPLETE){
+				return true;
 			}
-			client_clear(c);
 			client_write_error(c, err);
-			client_flush(c);
-			return err;
+			return false;
 		}
 		err = exec_command(c);
-		if (err){
-			client_clear(c);
+		if (err != NULL){
+			if (err == ERR_QUIT){
+				return false;
+			}
 			client_write_error(c, err);
-			client_flush(c);
+			return true;
 		}
-		cmds++;
 	}
-	return NULL;
+	return true;
 }
