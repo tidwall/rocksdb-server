@@ -153,7 +153,7 @@ int main(int argc, char **argv) {
 	loop = uv_default_loop();
 
 	struct sockaddr_in addr;
-	uv_ip4_addr("0.0.0.0", 5555, &addr);
+	uv_ip4_addr("0.0.0.0", tcp_port, &addr);
 
 	uv_tcp_init(loop, &server);
 	uv_tcp_bind(&server, (const struct sockaddr*)&addr, 0);
@@ -162,5 +162,6 @@ int main(int argc, char **argv) {
 	if (r) {
 		err(1, "uv_listen");
 	}
+	fprintf(stderr, "00000:M 01 Jan 00:00:00.000 * The server is now ready to accept connections on port %d\n", tcp_port);
 	return uv_run(loop, UV_RUN_DEFAULT);
 }
