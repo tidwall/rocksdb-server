@@ -1,5 +1,5 @@
 all: rocksdb libuv
-	@g++ -O3 -std=c++11 \
+	@g++ -O2 -std=c++11 \
 		-DROCKSDB_VERSION="\"4.13"\" \
 		-DSERVER_VERSION="\"0.1.0"\" \
 		-DLIBUV_VERSION="\"1.10.1"\" \
