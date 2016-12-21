@@ -121,7 +121,7 @@ void opendb(){
 
 void flushdb(){
 	delete db;
-	if (remove_directory(dir)){
+	if (remove_directory(dir, false)){
 		err(1, "remove_directory");
 	}
 	opendb();

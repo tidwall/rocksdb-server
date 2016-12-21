@@ -1,6 +1,6 @@
 #include "server.h"
 
-int remove_directory(const char *path){
+int remove_directory(const char *path, int remove_parent){
 	DIR *d = opendir(path);
 	size_t path_len = strlen(path);
 	int r = -1;
@@ -11,7 +11,6 @@ int remove_directory(const char *path){
 			int r2 = -1;
 			char *buf;
 			size_t len;
-
 			if (!strcmp(p->d_name, ".") || !strcmp(p->d_name, "..")){
 			  continue;
 			}
@@ -24,9 +23,9 @@ int remove_directory(const char *path){
             snprintf(buf, len, "%s/%s", path, p->d_name);
 			if (!stat(buf, &statbuf)){
 				if (S_ISDIR(statbuf.st_mode)){
-					r2 = remove_directory(buf);
+					r2 = remove_directory(buf, 1);
                 }else{
-                   r2 = unlink(buf);
+					r2 = unlink(buf);
 				}
             }
 			free(buf);
@@ -34,7 +33,7 @@ int remove_directory(const char *path){
 		}
 		closedir(d);
 	}
-	if (!r){
+	if (!r&&remove_parent){
 	   r = rmdir(path);
 	}
 	return r;
