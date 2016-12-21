@@ -1,3 +1,4 @@
+#include <unistd.h>
 #include "server.h"
 
 rocksdb::DB* db = NULL;
@@ -77,10 +78,39 @@ void on_accept(uv_stream_t *server, int status) {
 	}
 }
 
+void log(char c, const char *format, ...){
+	time_t rawtime;
+	struct tm *info;
+	char tbuf[32];
+	struct timespec spec;
+    clock_gettime(CLOCK_REALTIME, &spec);
+	rawtime = spec.tv_sec;	
+	info = localtime( &rawtime );
+	strftime(tbuf,sizeof(tbuf),"%d %b %H:%M:%S", info);
+	char buffer[512];
+	va_list args;
+	va_start(args, format);
+	vsnprintf(buffer,sizeof(buffer),format, args);
+	char cc[32];
+	if (isatty(1)){
+		switch (c) {
+		default: cc[0] = c; cc[1] = 0; 
+		case '.': strcpy(cc, "\x1b[35m.\x1b[0m"); break;
+		case '*': strcpy(cc, "\x1b[1m*\x1b[0m"); break;
+		case '#': strcpy(cc, "\x1b[33m#\x1b[0m"); break;
+		}
+	}else{
+		cc[0] = c; cc[1] = 0;
+	}
+	fprintf(stderr, "%d:M %s.%d %s %s\n", getpid(), tbuf, ((int)(spec.tv_nsec/1.0e6))%1000, cc, buffer);
+	va_end(args);
+}
+
 int main(int argc, char **argv) {
 	const char *dir = "data";
 	int tcp_port = 5555;
 	bool tcp_port_provided = false;
+	bool inmem = false;
 	for (int i=1;i<argc;i++){
 		if (strcmp(argv[i], "-h")==0||
 			strcmp(argv[i], "--help")==0||
@@ -99,6 +129,8 @@ int main(int argc, char **argv) {
 			dir = argv[++i];
 		}else if (strcmp(argv[i], "--nosync")==0){
 			nosync = true;
+		}else if (strcmp(argv[i], "--inmem")==0){
+			inmem = true;
 		}else if (strcmp(argv[i], "-p")==0){
 			if (i+1 == argc){
 				fprintf(stderr, "argument missing after: \"%s\"\n", argv[i]);
@@ -115,10 +147,12 @@ int main(int argc, char **argv) {
 			return 1;
 		}
 	}
-
-	fprintf(stderr, "00000:M 01 Jan 00:00:00.000 # Server started, RocksDB version " ROCKSDB_VERSION ", Libuv version " LIBUV_VERSION ", Server version " SERVER_VERSION "\n");
+	log('#', "Server started, RocksDB version " ROCKSDB_VERSION ", Libuv version " LIBUV_VERSION ", Server version " SERVER_VERSION);
 	rocksdb::Options options;
 	options.create_if_missing = true;
+	if (inmem){
+		options.env = rocksdb::NewMemEnv(rocksdb::Env::Default());
+	}
 	rocksdb::Status s = rocksdb::DB::Open(options, dir, &db);
 	if (!s.ok()){
 		err(1, "%s", s.ToString().c_str());
@@ -137,6 +171,6 @@ int main(int argc, char **argv) {
 	if (r) {
 		err(1, "uv_listen");
 	}
-	fprintf(stderr, "00000:M 01 Jan 00:00:00.000 * The server is now ready to accept connections on port %d\n", tcp_port);
+	log('*', "The server is now ready to accept connections on port %d", tcp_port);
 	return uv_run(loop, UV_RUN_DEFAULT);
 }

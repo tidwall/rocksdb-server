@@ -14,6 +14,8 @@ extern uv_loop_t *loop;
 extern const char *ERR_INCOMPLETE;
 extern const char *ERR_QUIT;
 
+void log(char c, const char *format, ...);
+
 int stringmatchlen(const char *pattern, int patternLen,
         const char *string, int stringLen, int nocase);
 
