@@ -13,7 +13,7 @@ error exec_set(client *c){
 	write_options.sync = !nosync;
 	rocksdb::Status s = db->Put(write_options, key, value);
 	if (!s.ok()){
-		panic(s.ToString().c_str());
+		err(1, "%s", s.ToString().c_str());
 	}
 	client_write(c, "+OK\r\n", 5);
 	return NULL;
@@ -35,7 +35,7 @@ error exec_get(client *c){
 			client_write(c, "$-1\r\n", 5);
 			return NULL;
 		}
-		panic(s.ToString().c_str());
+		err(1, "%s", s.ToString().c_str());
 	}
 	client_write_bulk(c, value.data(), value.size());
 	return NULL;
@@ -56,13 +56,13 @@ error exec_del(client *c){
 			client_write(c, ":0\r\n", 4);
 			return NULL;
 		}
-		panic(s.ToString().c_str());
+		err(1, "%s", s.ToString().c_str());
 	}
 	rocksdb::WriteOptions write_options;
 	write_options.sync = !nosync;
 	s = db->Delete(write_options, key);
 	if (!s.ok()){
-		panic(s.ToString().c_str());
+		err(1, "%s", s.ToString().c_str());
 	}
 	client_write(c, ":1\r\n", 4);
 	return NULL;

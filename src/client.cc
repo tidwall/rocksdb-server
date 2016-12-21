@@ -122,7 +122,7 @@ void client_err_alloc(client *c, int n){
 	}
 	c->tmp_err = (char*)malloc(n);
 	if (!c->tmp_err){
-		panic("out of memory");
+		err(1, "malloc");
 	}
 	memset(c->tmp_err, 0, n);
 }
@@ -150,11 +150,11 @@ void client_append_arg(client *c, const char *data, int nbyte){
 		}
 		c->args = (const char**)realloc(c->args, c->args_cap*sizeof(const char *));
 		if (!c->args){
-			panic("out of memory");
+			err(1, "malloc");
 		}
 		c->args_size = (int*)realloc(c->args_size, c->args_cap*sizeof(int));
 		if (!c->args_size){
-			panic("out of memory");
+			err(1, "malloc");
 		}
 	}
 	c->args[c->args_len] = data;
