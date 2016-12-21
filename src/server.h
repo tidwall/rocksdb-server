@@ -6,18 +6,6 @@
 #include <err.h>
 #include <rocksdb/db.h>
 
-#ifndef ROCKSDB_VERSION
-#define ROCKSDB_VERSION "0.0"
-#endif
-
-#ifndef LIBUV_VERSION
-#define LIBUV_VERSION "0.0.0"
-#endif
-
-#ifndef SERVER_VERSION
-#define SERVER_VERSION "0.0.0"
-#endif
-
 extern rocksdb::DB* db;
 extern bool nosync;
 extern int nprocs;

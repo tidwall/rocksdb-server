@@ -79,12 +79,8 @@ void on_accept(uv_stream_t *server, int status) {
 
 int main(int argc, char **argv) {
 	const char *dir = "data";
-	const char *unix_path = "";
-	bool unix_path_provided = false;
 	int tcp_port = 5555;
 	bool tcp_port_provided = false;
-	bool cpus_provided = false;
-	bool piped = false;
 	for (int i=1;i<argc;i++){
 		if (strcmp(argv[i], "-h")==0||
 			strcmp(argv[i], "--help")==0||
@@ -103,13 +99,6 @@ int main(int argc, char **argv) {
 			dir = argv[++i];
 		}else if (strcmp(argv[i], "--nosync")==0){
 			nosync = true;
-	/*	}else if (strcmp(argv[i], "-u")==0){
-			if (i+1 == argc){
-				fprintf(stderr, "argument missing after: \"%s\"\n", argv[i]);
-				return 1;
-			}
-			unix_path = argv[++i];
-			unix_path_provided = true;*/
 		}else if (strcmp(argv[i], "-p")==0){
 			if (i+1 == argc){
 				fprintf(stderr, "argument missing after: \"%s\"\n", argv[i]);
@@ -121,26 +110,12 @@ int main(int argc, char **argv) {
 			}
 			i++;
 			tcp_port_provided = true;
-		/*}else if (strcmp(argv[i], "-")==0){
-			piped = true;
-		}else if (strcmp(argv[i], "--nprocs")==0){
-			if (i+1 == argc){
-				fprintf(stderr, "argument missing after: \"%s\"\n", argv[i]);
-				return 1;
-			}
-			nprocs = atoi(argv[i+1]);
-			if (nprocs <= 0 || nprocs > 128){
-				fprintf(stderr, "invalid option '%s' for argument: \"%s\"\n", argv[i+1], argv[i]);
-			}
-			i++;
-			if (nprocs != 1){
-				cpus_provided = true;
-			}*/
 		}else{
 			fprintf(stderr, "unknown option argument: \"%s\"\n", argv[i]);
 			return 1;
 		}
 	}
+
 	fprintf(stderr, "00000:M 01 Jan 00:00:00.000 # Server started, RocksDB version " ROCKSDB_VERSION ", Libuv version " LIBUV_VERSION ", Server version " SERVER_VERSION "\n");
 	rocksdb::Options options;
 	options.create_if_missing = true;

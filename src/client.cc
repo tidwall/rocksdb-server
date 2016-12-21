@@ -110,8 +110,6 @@ void client_flush_offset(client *c, int offset){
 }
 
 
-// client_flush flushes the bytes to the client output stream. it does not
-// check for errors because the client read operations handle socket errors.
 void client_flush(client *c){
 	client_flush_offset(c, 0);
 }
