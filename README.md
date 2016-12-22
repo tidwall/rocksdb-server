@@ -1,5 +1,5 @@
 # RocksDB-Server
-Fast [Redis](https://redis.io/) clone written in C using [RocksDB](http://rocksdb.org/) as a backend. 
+Fast and simple [Redis](https://redis.io/) clone written in C using [RocksDB](http://rocksdb.org/) as a backend.
 
 ## Supported commands
 
@@ -37,10 +37,10 @@ $ make
 ```
 usage: ./rocksdb-server [-d data_path] [-p tcp_port] [--sync] [--inmem]
 ```
+- `-d`      -- The database path. Default `./data/`
+- `-p`      -- TCP server port. Default 5555.
 - `--inmem` -- The active dataset is stored in memory. 
 - `--sync`  -- Execute fsync after every SET. More durable, but much slower.
-- `-p`      -- TCP server port.
-- `-d`      -- The database path.
 
 ## Contact
 Josh Baker [@tidwall](http://twitter.com/tidwall)
