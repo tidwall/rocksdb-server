@@ -1,5 +1,5 @@
 # RocksDB-Server
-A high performance [Redis](https://redis.io/) clone written in C using [RocksDB](http://rocksdb.org/) as a backend. 
+Fast [Redis](https://redis.io/) clone written in C using [RocksDB](http://rocksdb.org/) as a backend. 
 
 ## Supported commands
 
