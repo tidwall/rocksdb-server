@@ -110,6 +110,21 @@ void log(char c, const char *format, ...){
 void opendb(){
 	rocksdb::Options options;
 	options.create_if_missing = true;
+	options.write_buffer_size = 512 * 1024 * 1024;
+	options.max_write_buffer_number = 5;
+	options.min_write_buffer_number_to_merge = 2;
+	options.compression = rocksdb::kNoCompression;
+	
+	//options.compression = rocksdb::kSnappyCompression;
+	/*
+	compression=kSnappyCompression;
+    bloom_locality=1;
+	memtable_prefix_bloom_bits=100000000;
+	memtable_prefix_bloom_probes=6;
+    block_based_table_factory={block_cache=512M;filter_policy=bloomfilter:10:true};
+	max_open_files=10000;
+	rate_limiter_bytes_per_sec=50M
+	*/
 	if (inmem){
 		options.env = rocksdb::NewMemEnv(rocksdb::Env::Default());
 	}

@@ -6,6 +6,7 @@
 #include <err.h>
 #include <uv.h>
 #include <rocksdb/db.h>
+#include <rocksdb/options.h>
 
 extern rocksdb::DB* db;
 extern bool nosync;
