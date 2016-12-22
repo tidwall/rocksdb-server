@@ -19,8 +19,13 @@ void log(char c, const char *format, ...);
 
 int stringmatchlen(const char *pattern, int patternLen,
         const char *string, int stringLen, int nocase);
+int pattern_limits(const char *pattern, int patternLen, 
+		char **start, int *startLen, char **end, int *endLen);
 void flushdb();
 int remove_directory(const char *path, int remove_parent);
+
+// atoul returns a positive integer. invalid or negative integers return -1.
+int atop(const char* str, int len);
 
 typedef const char *error;
 

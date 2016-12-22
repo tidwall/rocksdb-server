@@ -1,5 +1,19 @@
 #include "server.h"
 
+static bool islstr(client *c, int arg_idx, const char *str){
+	int i = 0;
+	for (;i<c->args_size[arg_idx];i++){
+		if (c->args[arg_idx][i] != str[i] && c->args[arg_idx][i] != str[i]-32){
+			return false;
+		}
+	}
+	return !str[i];
+}
+
+static bool iscmd(client *c, const char *cmd){
+	return islstr(c, 0, cmd);
+}
+
 error exec_set(client *c){
 	const char **argv = c->args;
 	int *argl = c->args_size;
@@ -82,26 +96,66 @@ error exec_flushdb(client *c){
 	return NULL;
 }
 
-error exec_keys(client *c){
-	const char **argv = c->args;
-	int *argl = c->args_size;
-	int argc = c->args_len;
-	if (argc!=2){
-		return "wrong number of arguments for 'keys' command";
+static error exec_scan_keys(client *c, 
+		bool scan,
+		const char *pat, int pat_len, 
+		int cursor, int count
+){
+	if (count < 0){
+		count = 10;
+	}
+	if (cursor < 0){
+		cursor = 0;
 	}
 
+	char *start = NULL;
+	char *end = NULL;
+	int start_len = 0;
+	int end_len = 0;
+	int star = pattern_limits(pat, pat_len, &start, &start_len, &end, &end_len);
+	std::string prefix(start, start_len);
+	std::string postfix(end, end_len);
+	
 	// to avoid double-buffering, prewrite some bytes and then we'll go back 
 	// and fill it in with correctness.
-	client_write(c, "012345678901234567890123456789", 30);
-
-	int count = 0;
+	const int filler = 128;
+	for (int i=0;i<filler;i++){
+		client_write_byte(c, '?');
+	}
+	int total = 0;
+	int i = 0;
+	int ncursor = 0;
 	rocksdb::Iterator* it = db->NewIterator(rocksdb::ReadOptions());
-	for (it->SeekToFirst(); it->Valid(); it->Next()) {
+	if (star){
+		it->SeekToFirst();
+	}else{
+		it->Seek(prefix);
+	}
+	for (; it->Valid(); it->Next()) {
 		rocksdb::Slice key = it->key();
-		if (stringmatchlen(argv[1], argl[1], key.data(), key.size(), 1)){
-			client_write_bulk(c, key.data(), key.size());
-			count++;	
+		if (stringmatchlen(pat, pat_len, key.data(), key.size(), 1)){
+			if (!star){
+				int res = key.compare(postfix);
+				if (res>=0){
+					break;
+				}
+			}
+			if (i >= cursor){
+				if (total==count){
+					ncursor = i;
+					break;
+				}
+				client_write_bulk(c, key.data(), key.size());
+				total++;	
+			}
+			i++;
 		}
+	}
+	if (start){
+		free(start);
+	}
+	if (end){
+		free(end);
 	}
 
 	rocksdb::Status s = it->status();
@@ -111,24 +165,69 @@ error exec_keys(client *c){
 	delete it;
 
 	// fill in the header and write from offset.
-	char nb[32];
-	sprintf(nb, "*%d\r\n", count);
+	char nb[filler];
+	if (scan){
+		char cursor_s[32];
+		sprintf(cursor_s, "%d", ncursor);
+		sprintf(nb, "*2\r\n$%zu\r\n%s\r\n*%d\r\n", strlen(cursor_s), cursor_s, total);
+	}else{
+		sprintf(nb, "*%d\r\n", total);
+	}
 	int nbn = strlen(nb);
-	memcpy(c->output+30-nbn, nb, nbn);
-	c->output_offset = 30-nbn;
+	memcpy(c->output+filler-nbn, nb, nbn);
+	c->output_offset = filler-nbn;
 
 	return NULL;
 }
 
-static bool iscmd(client *c, const char *cmd){
-	int i = 0;
-	for (;i<c->args_size[0];i++){
-		if (c->args[0][i] != cmd[i] && c->args[0][i] != cmd[i]-32){
-			return false;
+error exec_keys(client *c){
+	const char **argv = c->args;
+	int *argl = c->args_size;
+	int argc = c->args_len;
+	if (argc!=2){
+		return "wrong number of arguments for 'keys' command";
+	}
+	return exec_scan_keys(c, false, argv[1], argl[1], -1, -1);
+}
+error exec_scan(client *c){
+	const char **argv = c->args;
+	int *argl = c->args_size;
+	int argc = c->args_len;
+	if (argc<2){
+		return "wrong number of arguments for 'scan' command";
+	}
+	int cursor = atop(argv[1], argl[1]);
+	if (cursor < 0){
+		return "invalid cursor";
+	}
+	int count = -1;
+	const char *pat = "*";
+	int pat_len = 1;
+
+	for (int i=2;i<argc;i++){
+		if (islstr(c, i, "match")){
+			i++;
+			if (i==argc){
+				return "syntax error";
+			}
+			pat = argv[i];
+			pat_len = argl[i];
+		}else if (islstr(c, i, "count")){
+			i++;
+			if (i==argc){
+				return "syntax error";
+			}
+			count = atop(argv[i], argl[i]);
+			if (count < 0){
+				return "value is not an integer or out of range";
+			}
+		}else{
+			return "syntax error";
 		}
 	}
-	return !cmd[i];
+	return exec_scan_keys(c, true, pat, pat_len, cursor, count);
 }
+
 
 error exec_command(client *c){
 	if (c->args_len==0||(c->args_len==1&&c->args_size[0]==0)){
@@ -144,6 +243,8 @@ error exec_command(client *c){
 		return exec_quit(c);
 	}else if (iscmd(c, "keys")){
 		return exec_keys(c);
+	}else if (iscmd(c, "scan")){
+		return exec_scan(c);
 	}else if (iscmd(c, "flushdb")){
 		return exec_flushdb(c);
 	}
