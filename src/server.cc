@@ -1,7 +1,7 @@
 #include "server.h"
 
 rocksdb::DB* db = NULL;
-bool nosync = false;
+bool nosync = true;
 int nprocs = 1;
 uv_loop_t *loop = NULL;
 bool inmem = false;
@@ -110,21 +110,6 @@ void log(char c, const char *format, ...){
 void opendb(){
 	rocksdb::Options options;
 	options.create_if_missing = true;
-	options.write_buffer_size = 512 * 1024 * 1024;
-	options.max_write_buffer_number = 5;
-	options.min_write_buffer_number_to_merge = 2;
-	options.compression = rocksdb::kNoCompression;
-	
-	//options.compression = rocksdb::kSnappyCompression;
-	/*
-	compression=kSnappyCompression;
-    bloom_locality=1;
-	memtable_prefix_bloom_bits=100000000;
-	memtable_prefix_bloom_probes=6;
-    block_based_table_factory={block_cache=512M;filter_policy=bloomfilter:10:true};
-	max_open_files=10000;
-	rate_limiter_bytes_per_sec=50M
-	*/
 	if (inmem){
 		options.env = rocksdb::NewMemEnv(rocksdb::Env::Default());
 	}
@@ -150,7 +135,7 @@ int main(int argc, char **argv) {
 			strcmp(argv[i], "--help")==0||
 			strcmp(argv[i], "-?")==0){
 			fprintf(stdout, "RocksDB version " ROCKSDB_VERSION ", Libuv version " LIBUV_VERSION ", Server version " SERVER_VERSION "\n");
-			fprintf(stdout, "usage: %s [-d data_path] [-p tcp_port] [--nosync] [--inmem]\n", argv[0]);
+			fprintf(stdout, "usage: %s [-d data_path] [-p tcp_port] [--sync] [--inmem]\n", argv[0]);
 			return 0;
 		}else if (strcmp(argv[i], "--version")==0){
 			fprintf(stdout, "RocksDB version " ROCKSDB_VERSION ", Libuv version " LIBUV_VERSION ", Server version " SERVER_VERSION "\n");
@@ -161,8 +146,8 @@ int main(int argc, char **argv) {
 				return 1;
 			}
 			dir = argv[++i];
-		}else if (strcmp(argv[i], "--nosync")==0){
-			nosync = true;
+		}else if (strcmp(argv[i], "--sync")==0){
+			nosync = false;
 		}else if (strcmp(argv[i], "--inmem")==0){
 			inmem = true;
 		}else if (strcmp(argv[i], "-p")==0){

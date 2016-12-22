@@ -35,14 +35,12 @@ $ make
 ## Running
 
 ```
-usage: ./rocksdb-server [-d data_path] [-p tcp_port] [--nosync] [--inmem]
+usage: ./rocksdb-server [-d data_path] [-p tcp_port] [--sync] [--inmem]
 ```
-- `--inmem` -- The active dataset is stored in memory and persisted to disk. 
-- `--nosync` -- Leaves disk syncing up to the operating system.
-Fast writes, but a risk of data loss for server crashes or power loss.
-- `-p` -- TCP server port.
-- `-d` -- The database path.
-
+- `--inmem` -- The active dataset is stored in memory. 
+- `--sync`  -- Execute fsync after every SET. More durable, but much slower.
+- `-p`      -- TCP server port.
+- `-d`      -- The database path.
 
 ## Contact
 Josh Baker [@tidwall](http://twitter.com/tidwall)
