@@ -42,8 +42,7 @@ error exec_get(client *c){
 	}	
 	std::string key(argv[1], argl[1]);
 	std::string value;
-	rocksdb::ReadOptions read_options;
-	rocksdb::Status s = db->Get(read_options, key, &value);
+	rocksdb::Status s = db->Get(rocksdb::ReadOptions(), key, &value);
 	if (!s.ok()){
 		if (s.IsNotFound()){
 			client_write(c, "$-1\r\n", 5);
@@ -141,7 +140,7 @@ static error exec_scan_keys(client *c,
 				}
 			}
 			if (i >= cursor){
-				if (total==count){
+				if (scan&&total==count){
 					ncursor = i;
 					break;
 				}
