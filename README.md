@@ -12,7 +12,7 @@ SCAN cursor [MATCH pattern] [COUNT count]
 FLUSHDB
 ```
 
-Any [Redis clients](https://redis.io/clients) should work.
+Any [Redis client](https://redis.io/clients) should work.
 
 ## Building
 
