@@ -23,7 +23,7 @@ Requires `libtool` and `automake`.
 
 Ubuntu users:
 ```
-$ apt-get install build-esstential libtool automake
+$ apt-get install build-essential libtool automake
 ```
 
 To build everything simply:
