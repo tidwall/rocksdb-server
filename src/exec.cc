@@ -231,7 +231,7 @@ error exec_scan(client *c){
 error exec_command(client *c){
 	if (c->args_len==0||(c->args_len==1&&c->args_size[0]==0)){
 		return NULL;
-	}	}
+	}
 	if (iscmd(c, "set")){
 		return exec_set(c);
 	}else if (iscmd(c, "get")){
