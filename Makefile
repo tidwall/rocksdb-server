@@ -1,16 +1,11 @@
 all:
 	@g++ -O2 -std=c++11 $(FLAGS) \
 		-DSERVER_VERSION="\"0.1.0"\" \
-		-Isrc/rocksdb-4.13/include/ \
-		-Isrc/libuv-1.10.1/build/include/ \
+		-lrocksdb \
+		-llibuv \
 		-pthread \
 		-o rocksdb-server \
-		src/server.cc src/client.cc src/exec.cc src/match.cc src/util.cc \
-		src/rocksdb-4.13/librocksdb.a \
-		src/rocksdb-4.13/libbz2.a \
-		src/rocksdb-4.13/libz.a \
-		src/rocksdb-4.13/libsnappy.a \
-		src/libuv-1.10.1/build/lib/libuv.a
+		src/server.cc src/client.cc src/exec.cc src/match.cc src/util.cc
 clean:
 	rm -f rocksdb-server
 	rm -rf src/libuv-1.10.1/
