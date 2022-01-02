@@ -231,9 +231,22 @@ error exec_scan(client *c){
 error exec_command(client *c){
 	if (c->args_len==0||(c->args_len==1&&c->args_size[0]==0)){
 		return NULL;
-	}
+	}	}
+	if (iscmd(c, "set")){
+		return exec_set(c);
+	}else if (iscmd(c, "get")){
 	if (iscmd(c, "get")){
 		return exec_get(c);
+	}else if (iscmd(c, "del")){
+		return exec_del(c);
+	}else if (iscmd(c, "quit")){
+		return exec_quit(c);
+	}else if (iscmd(c, "keys")){
+		return exec_keys(c);
+	}else if (iscmd(c, "scan")){
+		return exec_scan(c);
+	}else if (iscmd(c, "flushdb")){
+		return exec_flushdb(c);
 	}
 	return client_err_unknown_command(c, c->args[0], c->args_size[0]);
 }
