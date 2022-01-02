@@ -235,7 +235,6 @@ error exec_command(client *c){
 	if (iscmd(c, "set")){
 		return exec_set(c);
 	}else if (iscmd(c, "get")){
-	if (iscmd(c, "get")){
 		return exec_get(c);
 	}else if (iscmd(c, "del")){
 		return exec_del(c);
