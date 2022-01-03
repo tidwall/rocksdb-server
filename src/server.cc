@@ -134,7 +134,7 @@ int main(int argc, char **argv) {
 		if (strcmp(argv[i], "-h")==0||
 			strcmp(argv[i], "--help")==0||
 			strcmp(argv[i], "-?")==0){
-			fprintf(stdout, "RocksDB version %d.%d.%d, Libuv version "" uv_version_string() "", Server version " SERVER_VERSION "\n", ROCKSDB_MAJOR, ROCKSDB_MAJOR, ROCKSDB_PATCH);
+			fprintf(stdout, "RocksDB version %d.%d.%d, Libuv version %s, Server version " SERVER_VERSION "\n", ROCKSDB_MAJOR, ROCKSDB_MINOR, ROCKSDB_PATCH, uv_version_string());
 			fprintf(stdout, "usage: %s [-d data_path] [-p tcp_port] [--sync] [--inmem]\n", argv[0]);
 			return 0;
 		}else if (strcmp(argv[i], "--version")==0){
