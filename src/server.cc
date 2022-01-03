@@ -134,11 +134,12 @@ int main(int argc, char **argv) {
 		if (strcmp(argv[i], "-h")==0||
 			strcmp(argv[i], "--help")==0||
 			strcmp(argv[i], "-?")==0){
-			fprintf(stdout, "RocksDB version " ROCKSDB_VERSION ", Libuv version " LIBUV_VERSION ", Server version " SERVER_VERSION "\n");
+			fprintf(stdout, "RocksDB version %d.%d.%d, Libuv version %s, Server version " SERVER_VERSION "\n", ROCKSDB_MAJOR, ROCKSDB_MINOR, ROCKSDB_PATCH, uv_version_string());
 			fprintf(stdout, "usage: %s [-d data_path] [-p tcp_port] [--sync] [--inmem]\n", argv[0]);
 			return 0;
 		}else if (strcmp(argv[i], "--version")==0){
-			fprintf(stdout, "RocksDB version " ROCKSDB_VERSION ", Libuv version " LIBUV_VERSION ", Server version " SERVER_VERSION "\n");
+			fprintf(stdout, "RocksDB version %d.%d.%d, Libuv version %s, Server version " SERVER_VERSION "\n", ROCKSDB_MAJOR, ROCKSDB_MINOR, ROCKSDB_PATCH, uv_version_string());
+			fprintf(stdout, "Server version " SERVER_VERSION "\n");
 			return 0;
 		}else if (strcmp(argv[i], "-d")==0){
 			if (i+1 == argc){
@@ -166,7 +167,7 @@ int main(int argc, char **argv) {
 			return 1;
 		}
 	}
-	log('#', "Server started, RocksDB version " ROCKSDB_VERSION ", Libuv version " LIBUV_VERSION ", Server version " SERVER_VERSION);
+	log('#', "Server started, RocksDB version %d.%d.%d, Libuv version %s, Server version " SERVER_VERSION "\n", ROCKSDB_MAJOR, ROCKSDB_MINOR, ROCKSDB_PATCH, uv_version_string());
 	opendb();
 
 	uv_tcp_t server;
