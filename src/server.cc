@@ -10,7 +10,7 @@ const char *dir = "data";
 const char *ERR_INCOMPLETE = "incomplete";
 const char *ERR_QUIT = "quit";
 
-const char *rocksdb_version = rocksdb::GetRocksVersionAsString(true);
+const char *rocksdb_version = GetRocksVersionAsString(true);
 
 void get_buffer(uv_handle_t *handle, size_t size, uv_buf_t *buf){
 	client *c = (client*)handle;
