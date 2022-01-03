@@ -130,7 +130,7 @@ void flushdb(){
 int main(int argc, char **argv) {
 	int tcp_port = 5555;
 	bool tcp_port_provided = false;
-	const char *rocksdb_version = rocksdb::Version::GetRocksVersionAsString();
+	const char *rocksdb_version = rocksdb::GetRocksVersionAsString();
 	for (int i=1;i<argc;i++){
 		if (strcmp(argv[i], "-h")==0||
 			strcmp(argv[i], "--help")==0||
