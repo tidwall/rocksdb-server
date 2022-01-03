@@ -10,8 +10,6 @@ const char *dir = "data";
 const char *ERR_INCOMPLETE = "incomplete";
 const char *ERR_QUIT = "quit";
 
-const char *rocksdb_version = GetRocksVersionAsString(true);
-
 void get_buffer(uv_handle_t *handle, size_t size, uv_buf_t *buf){
 	client *c = (client*)handle;
 	if (c->buf_cap-c->buf_idx-c->buf_len < size){
@@ -136,7 +134,7 @@ int main(int argc, char **argv) {
 		if (strcmp(argv[i], "-h")==0||
 			strcmp(argv[i], "--help")==0||
 			strcmp(argv[i], "-?")==0){
-			fprintf(stdout, "RocksDB version "" rocksdb_version "", Libuv version "" uv_version_string() "", Server version " SERVER_VERSION "\n");
+			fprintf(stdout, "RocksDB version "" ROCKSDB_MAJOR "", Libuv version "" uv_version_string() "", Server version " SERVER_VERSION "\n");
 			fprintf(stdout, "usage: %s [-d data_path] [-p tcp_port] [--sync] [--inmem]\n", argv[0]);
 			return 0;
 		}else if (strcmp(argv[i], "--version")==0){
