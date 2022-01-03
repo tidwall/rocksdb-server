@@ -10,6 +10,8 @@ const char *dir = "data";
 const char *ERR_INCOMPLETE = "incomplete";
 const char *ERR_QUIT = "quit";
 
+const char *rocksdb_version = rocksdb::GetRocksVersionAsString(true);
+
 void get_buffer(uv_handle_t *handle, size_t size, uv_buf_t *buf){
 	client *c = (client*)handle;
 	if (c->buf_cap-c->buf_idx-c->buf_len < size){
@@ -130,7 +132,6 @@ void flushdb(){
 int main(int argc, char **argv) {
 	int tcp_port = 5555;
 	bool tcp_port_provided = false;
-	const char *rocksdb_version = rocksdb::GetRocksVersionAsString(true);
 	for (int i=1;i<argc;i++){
 		if (strcmp(argv[i], "-h")==0||
 			strcmp(argv[i], "--help")==0||
