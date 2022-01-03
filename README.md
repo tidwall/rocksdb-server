@@ -22,10 +22,19 @@ Please let me know if you run into build problems.
 Requires `libtool` and `automake`.
 
 Ubuntu users:
-```
-$ apt-get install build-essential libtool automake git make libuv1-dev librocksdb-dev
 
 ```
+$ apt-get install build-essential libtool automake make
+```
+
+In case `libuv`, `rocksdb`, or `git` are not installed:
+
+
+```
+$ apt-get install git libuv1-dev librocksdb-dev
+```
+
+
 
 To build everything simply:
 
